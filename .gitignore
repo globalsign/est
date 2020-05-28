@@ -1,0 +1,11 @@
+# Temporary files
+*.out
+*.swp
+*~
+
+# Log files
+*.log
+
+# Executable files
+cmd/estserver/estserver
+cmd/estclient/estclient
