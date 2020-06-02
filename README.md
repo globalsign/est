@@ -1,6 +1,7 @@
 # est
 
 [![GoDoc](https://godoc.org/github.com/globalsign/est?status.svg)](https://godoc.org/github.com/globalsign/est)
+[![Build Status](https://travis-ci.org/globalsign/est.svg?branch=master)](https://travis-ci.org/globalsign/est)
 
 An implementation of the Enrollment over Secure Transport (EST) certificate
 enrollment protocol as defined by [RFC7030](https://tools.ietf.org/html/rfc7030).
