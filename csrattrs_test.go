@@ -67,8 +67,8 @@ func TestCSRAttrsMarshal(t *testing.T) {
 			name: "RFC7030Example",
 			attrs: est.CSRAttrs{
 				OIDs: []asn1.ObjectIdentifier{
-					asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7},
-					asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3},
+					{1, 2, 840, 113549, 1, 9, 7},
+					{1, 2, 840, 10045, 4, 3, 3},
 				},
 				Attributes: []est.Attribute{
 					{
@@ -168,8 +168,8 @@ func TestCSRAttrsUnmarshal(t *testing.T) {
 			},
 			want: est.CSRAttrs{
 				OIDs: []asn1.ObjectIdentifier{
-					asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7},
-					asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3},
+					{1, 2, 840, 113549, 1, 9, 7},
+					{1, 2, 840, 10045, 4, 3, 3},
 				},
 				Attributes: []est.Attribute{
 					{
