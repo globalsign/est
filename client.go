@@ -338,6 +338,10 @@ func (c *Client) TPMEnroll(
 			{contentType: mimeTypeOctetStream, data: akPub},
 		},
 	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	reqBody := ioutil.NopCloser(buf)
 
 	req, err := c.newRequest(ctx, http.MethodPost, tpmenrollEndpoint,
