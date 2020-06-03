@@ -365,7 +365,7 @@ func TestServerKeyGen(t *testing.T) {
 			if tc.bitsize != 0 {
 				r = &http.Request{
 					Header: map[string][]string{
-						"Bit-Size": []string{strconv.Itoa(tc.bitsize)},
+						"Bit-Size": {strconv.Itoa(tc.bitsize)},
 					},
 				}
 			}

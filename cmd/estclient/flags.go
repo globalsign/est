@@ -50,7 +50,7 @@ const (
 	appName        = "estclient"
 	defaultTimeout = time.Second * 15
 	sepChar        = ","
-	versionString  = "1.0.1"
+	versionString  = "1.0.2"
 )
 
 // Flag name constants.

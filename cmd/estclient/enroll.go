@@ -107,7 +107,8 @@ func enrollCommon(w io.Writer, set *flag.FlagSet, renew, keygen bool) error {
 			}
 		} else {
 			if keygen {
-				csrkey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+				var csrkey *ecdsa.PrivateKey
+				csrkey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 				if err != nil {
 					return fmt.Errorf("failed to generate temporary private key: %v", err)
 				}
