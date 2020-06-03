@@ -30,11 +30,10 @@ import (
 //
 // When the EST client retrieves and parses CSR attributes from an EST server,
 // attribute values of the ASN.1 types:
-//
-//  - OBJECT IDENTIFIER
-//  - BOOLEAN
-//  - INTEGER
-//  - most STRING types
+// - OBJECT IDENTIFIER
+// - BOOLEAN
+// - INTEGER
+// - most STRING types
 //
 // will be unmarshalled into the Attribute.Values field as standard Go
 // asn1.ObjectIdentifier, bool, *big.Int and string types where possible, and
@@ -75,11 +74,10 @@ func (a CSRAttrs) Marshal() ([]byte, error) {
 
 // Unmarshal parses an DER-encoded ASN.1 data structure and stores the result
 // in the object. Attribute values of the ASN.1 types:
-//
-//  - OBJECT IDENTIFIER
-//  - BOOLEAN
-//  - INTEGER
-//  - most STRING types
+// - OBJECT IDENTIFIER
+// - BOOLEAN
+// - INTEGER
+// - most STRING types
 //
 // will be unmarshalled into standard Go asn1.ObjectIdentifier, bool, *big.Int
 // and string types where possible, and can be retrieved via a type assertion.
