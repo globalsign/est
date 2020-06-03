@@ -584,7 +584,7 @@ func recoverer(logger Logger) func(next http.Handler) http.Handler {
 						scheme = "https"
 					}
 
-					logger.Errorf(
+					logger.Errorw(
 						logMsgPanicRecovery,
 						"Method", r.Method,
 						"URI", fmt.Sprintf("%s://%s%s", scheme, r.Host, r.RequestURI),
