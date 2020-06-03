@@ -35,6 +35,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -703,9 +704,7 @@ func TestCSR(t *testing.T) {
 				t.Fatalf("failed to parse certificate request: %v", err)
 			}
 
-			if csr.Subject.String() != tc.subject.String() {
-				t.Fatalf("got subject %v, want %v", csr.Subject, tc.subject)
-			}
+			assertPKIXNamesEqual(t, csr.Subject, tc.subject)
 
 			if !reflect.DeepEqual(csr.IPAddresses, tc.ips) {
 				t.Fatalf("got IPs %v, want %v", csr.IPAddresses, tc.ips)
@@ -949,5 +948,45 @@ func verifyErrorTextContains(t *testing.T, got, want error) {
 
 	if got != nil && !strings.Contains(got.Error(), want.Error()) {
 		t.Fatalf("got error %v, want %v", got, want)
+	}
+}
+
+// assertPKIXNamesEqual tests if two pkix.Name objects are equal in all
+// respects other than the ordering of the name attributes.
+func assertPKIXNamesEqual(t *testing.T, first, second pkix.Name) {
+	t.Helper()
+
+	atvLess := func(s []pkix.AttributeTypeAndValue) func(i, j int) bool {
+		return func(i, j int) bool {
+			if len(s[i].Type) < len(s[j].Type) {
+				return true
+			} else if len(s[i].Type) > len(s[j].Type) {
+				return false
+			}
+
+			for k := range s[i].Type {
+				if s[i].Type[k] < s[j].Type[k] {
+					return true
+				} else if s[i].Type[k] > s[j].Type[k] {
+					return false
+				}
+			}
+
+			if s[i].Value.(string) < s[j].Value.(string) {
+				return true
+			}
+
+			return false
+		}
+	}
+
+	firstSlice := first.ToRDNSequence()[0]
+	secondSlice := second.ToRDNSequence()[0]
+
+	sort.Slice(firstSlice, atvLess(firstSlice))
+	sort.Slice(secondSlice, atvLess(secondSlice))
+
+	if !reflect.DeepEqual(firstSlice, secondSlice) {
+		t.Fatalf("got %v, want %v", first, second)
 	}
 }
