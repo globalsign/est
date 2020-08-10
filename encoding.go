@@ -16,6 +16,7 @@ limitations under the License.
 package est
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/x509"
 	"encoding/base64"
@@ -29,11 +30,15 @@ import (
 	"go.mozilla.org/pkcs7"
 )
 
+const (
+	base64LineLength = 76
+)
+
 // base64Encode base64-encodes a slice of bytes using standard encoding.
 func base64Encode(src []byte) []byte {
 	enc := make([]byte, base64.StdEncoding.EncodedLen(len(src)))
 	base64.StdEncoding.Encode(enc, src)
-	return enc
+	return breakLines(enc, base64LineLength)
 }
 
 // base64Decode base64-decodes a slice of bytes using standard encoding.
@@ -237,4 +242,35 @@ func validatePublicAreaPublicKey(pub []byte, key crypto.PublicKey) error {
 	}
 
 	return nil
+}
+
+// breakLines inserts a CRLF line break in the provided slice of bytes every n
+// bytes, including a terminating CRLF for the last line.
+func breakLines(b []byte, n int) []byte {
+	crlf := []byte{'\r', '\n'}
+	initialLen := len(b)
+
+	// Just return a terminating CRLF if the input is empty.
+	if initialLen == 0 {
+		return crlf
+	}
+
+	// Allocate a buffer with suitable capacity to minimize allocations.
+	buf := bytes.NewBuffer(make([]byte, 0, initialLen+((initialLen/n)+1)*2))
+
+	// Split input into CRLF-terminated lines.
+	for {
+		lineLen := len(b)
+		if lineLen == 0 {
+			break
+		} else if lineLen > n {
+			lineLen = n
+		}
+
+		buf.Write(b[0:lineLen])
+		b = b[lineLen:]
+		buf.Write(crlf)
+	}
+
+	return buf.Bytes()
 }
