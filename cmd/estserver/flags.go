@@ -23,7 +23,7 @@ import (
 // Global constants.
 const (
 	appName       = "estserver"
-	versionString = "1.0.2"
+	versionString = "1.0.3"
 )
 
 // Flag name constants.
