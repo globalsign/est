@@ -110,6 +110,10 @@ func (e estError) StatusCode() int {
 
 // Error returns a human-readable description of the error.
 func (e estError) Error() string {
+	if e.desc == "" {
+		return http.StatusText(e.status)
+	}
+
 	return e.desc
 }
 
