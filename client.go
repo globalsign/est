@@ -475,11 +475,11 @@ func checkResponseError(r *http.Response) error {
 	// TODO(paul): Section 4.2.3 permits an application/pkcs-mime simple PKI
 	// response also to be used to convey an error response for enroll and
 	// reenroll operations.
-	var msg = "unknown error"
+	var msg string
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get(contentTypeHeader))
 	if err == nil || r.Header.Get(contentTypeHeader) == "" {
 		switch mediaType {
-		case mimeTypeTextPlain, "":
+		case "", mimeTypeTextPlain, mimeTypeJSON, mimeTypeProblemJSON:
 			data, err := ioutil.ReadAll(r.Body)
 			if err != nil {
 				return err
@@ -487,7 +487,13 @@ func checkResponseError(r *http.Response) error {
 
 			if len(data) > 0 {
 				msg = string(data)
+			} else {
+				msg = http.StatusText(r.StatusCode)
 			}
+
+		default:
+			msg = fmt.Sprintf("%s (%s)",
+				http.StatusText(r.StatusCode), mediaType)
 		}
 	}
 
