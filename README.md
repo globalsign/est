@@ -30,7 +30,7 @@ section 24 of the Trusted Platform Module 2.0 Library specification.
 
 ## Installation
 
-    go get -u github.com/globalsign/est
+    go get github.com/globalsign/est
     go install github.com/globalsign/est/cmd/estserver
     go install github.com/globalsign/est/cmd/estclient
 
