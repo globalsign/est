@@ -27,8 +27,6 @@ jobs:
     - name: Setup SoftHSM
       run: ./.github/scripts/setup-softhsm.sh
       shell: bash
-      env:
-        CDIR: $PWD/.config/softhsm2
 
     - name: Test
       run: go test -v ./...
