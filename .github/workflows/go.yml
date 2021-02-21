@@ -21,8 +21,10 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-    - name: softhsm
+    - name: Install SoftHSM
       run: sudo apt-get -y install softhsm2
+
+    - name: Output pwd
       run: pwd
 
     - name: Test
