@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # Exit on first error
-set -e
+set -ex
 
 # Store environment variables for actions
 export CDIR="$PWD/.config/softhsm"
 export SOFTHSM2_CONF="$CDIR/softhsm2.conf"
+echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
 
 # Create directories
 mkdir -p "$CDIR"
