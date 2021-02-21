@@ -4,8 +4,8 @@
 set -e
 
 # Store environment variables for actions
-CDIR="$PWD/.config/softhsm"
-echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
+export CDIR="$PWD/.config/softhsm"
+export SOFTHSM2_CONF="$CDIR/softhsm2.conf"
 
 # Create directories
 mkdir -p "$CDIR"
