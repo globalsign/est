@@ -1,6 +1,10 @@
 #!/bin/bash
 
+# Exit on first error
+set -e
+
 # Store environment variables for actions
+echo "Config directory is $CDIR"
 echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
 
 # Create directories
@@ -17,7 +21,7 @@ openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out "$CDIR/hsm_key.pem"
 softhsm2-util --import "$CDIR/hsm_key.pem" --token "Testing Token" --pin 1234 --label "Testing Key" --id 01
 
 # Create EST client configuration file
-cat << EOF > cmd/estclient/testdata/test_hsm.cfg
+cat << EOF > ../..cmd/estclient/testdata/test_hsm.cfg
 {
     "private_key": {
         "hsm": {
