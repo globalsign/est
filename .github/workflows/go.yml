@@ -39,6 +39,9 @@ jobs:
     - name: Append to SoftHSM config file
       run: echo "objectstore.backend = file" >> "$CDIR/softhsm2.conf"
 
+    - name: Set SoftHSM configuration environment variable
+      run: echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
+
     - name: Create SoftHSM token
       run: softhsm2-util --init-token --free --label "Testing Token" --pin 1234 --so-pin 1234
 
