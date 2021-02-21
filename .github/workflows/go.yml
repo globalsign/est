@@ -27,8 +27,20 @@ jobs:
     - name: Store config directory
       run: echo "CDIR=$PWD/.config/softhsm2" >> $GITHUB_ENV
 
-    - name: Make config directory
+    - name: Make SoftHSM config directory
       run: mkdir -p "$CDIR"
+
+    - name: Make SoftHSM tokens directory
+      run: mkdir -p "$CDIR/tokens"
+
+    - name: Create SoftHSM config file
+      run: echo "directories.tokendir = $CDIR/tokens" > "$CDIR/softhsm2.conf"
+
+    - name: Append to SoftHSM config file
+      run: echo "objectstore.backend = file" >> "$CDIR/softhsm2.conf"
+
+    - name: Create SoftHSM token
+      run: softhsm2-util --init-token --free --label "Testing Token" --pin 1234 --so-pin 1234
 
     - name: Output pwd
       run: pwd
