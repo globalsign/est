@@ -4,7 +4,7 @@
 set -e
 
 # Store environment variables for actions
-echo "Config directory is $CDIR"
+CDIR="$PWD/.config/softhsm"
 echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
 
 # Create directories
