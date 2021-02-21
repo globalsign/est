@@ -24,11 +24,17 @@ jobs:
     - name: Install SoftHSM
       run: sudo apt-get -y install softhsm2
 
+    - name: Store config directory
+      run: echo "CDIR=$PWD/.config/softhsm2" >> $GITHUB_ENV
+
+    - name: Make config directory
+      run: mkdir -p "$CDIR"
+
     - name: Output pwd
       run: pwd
 
     - name: List pwd
-      run: ls -alF
+      run: ls -alF "$CDIR"
 
     - name: Test
       run: go test -v ./...
