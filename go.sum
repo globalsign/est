@@ -30,8 +30,8 @@ github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMo
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/globalsign/pemfile v1.0.0 h1:iTMEUkrCwvi12n7VC2cQf0NgQhTk0heJlgVNLlZ6BQk=
 github.com/globalsign/pemfile v1.0.0/go.mod h1:EsDzl93ZIz/+1DGPnOGyQRUQez2HtClvHso7Rw6ldiE=
-github.com/globalsign/tpmkeys v1.0.2 h1:CJNFznAaiC+PddXqlaGNAlNxv11zR5I3QPB/YsQNN44=
-github.com/globalsign/tpmkeys v1.0.2/go.mod h1:mJYh93tJNGzrsKROzyRSnnnsFUMBXZqYzAHyyalEZjM=
+github.com/globalsign/tpmkeys v1.0.3 h1:eDVVgA6jrpGvYjEZslbw6u9r3xVqiT7+TFWeTnnuYkQ=
+github.com/globalsign/tpmkeys v1.0.3/go.mod h1:mJYh93tJNGzrsKROzyRSnnnsFUMBXZqYzAHyyalEZjM=
 github.com/go-chi/chi v4.1.2+incompatible h1:fGFk2Gmi/YKXk0OmGfBh0WgmN3XB8lVnEyNz34tQRec=
 github.com/go-chi/chi v4.1.2+incompatible/go.mod h1:eB3wogJHnLi3x/kFX2A+IbTBlXxmMeXJVKy9tTv1XzQ=
 github.com/go-kit/kit v0.8.0/go.mod h1:xBxKIO96dXMWWy0MnWVtmwkA9/13aqxPnvrjFYMA2as=
