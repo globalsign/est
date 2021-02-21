@@ -51,6 +51,9 @@ jobs:
     - name: Import private key to SoftHSM
       run: softhsm2-util --import "$CDIR/hsm_key.pem" --token "Testing Token" --pin 1234 --label "Testing Key" --id 01
 
+    - name: Copy config file
+      run: cp .ci/test_hsm_github.cfg cmd/estclient/testdata/test_hsm.cfg
+
     - name: Output pwd
       run: pwd
 
@@ -63,4 +66,4 @@ jobs:
     - name: Test
       run: go test -v ./...
       env:
-        GLOBALSIGN_EST_SKIP: hsm,tpm
+        GLOBALSIGN_EST_SKIP: tpm
