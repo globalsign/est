@@ -21,7 +21,7 @@ openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out "$CDIR/hsm_key.pem"
 softhsm2-util --import "$CDIR/hsm_key.pem" --token "Testing Token" --pin 1234 --label "Testing Key" --id 01
 
 # Create EST client configuration file
-cat << EOF > ../../cmd/estclient/testdata/test_hsm.cfg
+cat << EOF > cmd/estclient/testdata/test_hsm.cfg
 {
     "private_key": {
         "hsm": {
