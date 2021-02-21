@@ -105,7 +105,7 @@ func tpmenroll(w io.Writer, set *flag.FlagSet) error {
 	}
 
 	// Activate the credential we received.
-	tpm, err := tpm2.OpenTPM(cfg.PrivateKey.TPM.Device)
+	tpm, err := openTPM(cfg.PrivateKey.TPM.Device)
 	if err != nil {
 		return fmt.Errorf("failed to open TPM device: %v", err)
 	}
@@ -313,7 +313,7 @@ func readPublicAreaFromTPM(cfg *config, handle tpmutil.Handle) ([]byte, error) {
 		return nil, errNoTPMDevice
 	}
 
-	tpm, err := tpm2.OpenTPM(cfg.PrivateKey.TPM.Device)
+	tpm, err := openTPM(cfg.PrivateKey.TPM.Device)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open TPM device: %v", err)
 	}
