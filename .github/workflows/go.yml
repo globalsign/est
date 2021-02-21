@@ -24,44 +24,9 @@ jobs:
     - name: Install SoftHSM
       run: sudo apt-get -y install softhsm2
 
-    - name: Store config directory
-      run: echo "CDIR=$PWD/.config/softhsm2" >> $GITHUB_ENV
-
-    - name: Make SoftHSM config directory
-      run: mkdir -p "$CDIR"
-
-    - name: Make SoftHSM tokens directory
-      run: mkdir -p "$CDIR/tokens"
-
-    - name: Create SoftHSM config file
-      run: echo "directories.tokendir = $CDIR/tokens" > "$CDIR/softhsm2.conf"
-
-    - name: Append to SoftHSM config file
-      run: echo "objectstore.backend = file" >> "$CDIR/softhsm2.conf"
-
-    - name: Set SoftHSM configuration environment variable
-      run: echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
-
-    - name: Create SoftHSM token
-      run: softhsm2-util --init-token --free --label "Testing Token" --pin 1234 --so-pin 1234
-
-    - name: Create SoftHSM private key
-      run: openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out "$CDIR/hsm_key.pem"
-
-    - name: Import private key to SoftHSM
-      run: softhsm2-util --import "$CDIR/hsm_key.pem" --token "Testing Token" --pin 1234 --label "Testing Key" --id 01
-
-    - name: Copy config file
-      run: cp .ci/test_hsm_github.cfg cmd/estclient/testdata/test_hsm.cfg
-
-    - name: Output pwd
-      run: pwd
-
-    - name: List pwd
-      run: ls -alF "$CDIR"
-
-    - name: List libs
-      run: ls -alF /usr/lib/softhsm
+    - name: Setup SoftHSM
+      run: ./.github/scripts/setup-softhsm.sh
+      shell: bash
 
     - name: Test
       run: go test -v ./...
