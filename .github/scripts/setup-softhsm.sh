@@ -34,7 +34,3 @@ cat << EOF > "$PWD/cmd/estclient/testdata/test_hsm.cfg"
     }
 }
 EOF
-
-echo "$PWD/cmd/estclient/testdata"
-ls -alF "$PWD/cmd/estclient/testdata"
-cat "$PWD/cmd/estclient/testdata/test_hsm.cfg"
