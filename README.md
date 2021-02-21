@@ -1,7 +1,7 @@
 # est
 
 [![GoDoc](https://godoc.org/github.com/globalsign/est?status.svg)](https://godoc.org/github.com/globalsign/est)
-[![Build Status](https://travis-ci.org/globalsign/est.svg?branch=master)](https://travis-ci.org/globalsign/est)
+[![Build Status](https://github.com/globalsign/est/actions/workflows/go.yml/badge.svg)](https://github.com/globalsign/est/actions/workflows/go.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/globalsign/est)](https://goreportcard.com/report/github.com/globalsign/est)
 
 An implementation of the Enrollment over Secure Transport (EST) certificate
