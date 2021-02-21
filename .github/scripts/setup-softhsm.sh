@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # Store environment variables for actions
-echo "CDIR=$PWD/.config/softhsm2" >> $GITHUB_ENV
 echo "SOFTHSM2_CONF=$CDIR/softhsm2.conf" >> $GITHUB_ENV
 
 # Create directories
