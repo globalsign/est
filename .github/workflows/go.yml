@@ -49,7 +49,7 @@ jobs:
       run: openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out "$CDIR/hsm_key.pem"
 
     - name: Import private key to SoftHSM
-      run: softhsm2-util --import "$CDIR/hsm_key.pem" --pin 1234 --label "Testing Key" --id 01
+      run: softhsm2-util --import "$CDIR/hsm_key.pem" --token "Testing Token" --pin 1234 --label "Testing Key" --id 01
 
     - name: Output pwd
       run: pwd
