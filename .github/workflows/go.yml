@@ -27,6 +27,9 @@ jobs:
     - name: Output pwd
       run: pwd
 
+    - name: List pwd
+      run: ls -alF
+
     - name: Test
       run: go test -v ./...
       env:
