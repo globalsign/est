@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"reflect"
+	"strings"
 
 	"github.com/google/go-tpm/tpm2"
 	"go.mozilla.org/pkcs7"
@@ -154,7 +155,18 @@ func readAllBase64Request(r io.Reader) ([]byte, error) {
 		return nil, errInternal
 	}
 
+	// arlotito ---------------------------
+	// removes header/footer if there
+	s := string(b[:])
+	s = strings.Replace(s, "-----BEGIN CERTIFICATE REQUEST-----", "", -1)
+	s = strings.Replace(s, "-----END CERTIFICATE REQUEST-----", "", -1)
+
+	// convert back to binary buffer for base64 decoding
+	b = []byte(s)
+	// ------------------------------------
+
 	decoded, err := base64Decode(b)
+	
 	if err != nil {
 		return nil, errInvalidBase64
 	}
