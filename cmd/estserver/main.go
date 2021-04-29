@@ -243,7 +243,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP)
 
-	logger.Infof("Starting EST server FOR NON-PRODUCTION USE ONLY")
+	logger.Infof("Starting EST server FOR NON-PRODUCTION USE ONLY - patched by arlotito - https://github.com/arlotito/est")
 
 	go s.ListenAndServeTLS("", "")
 
