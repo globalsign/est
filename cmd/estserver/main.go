@@ -138,6 +138,8 @@ func main() {
 			clientCACerts = append(clientCACerts, certs...)
 		}
 
+		logger.Infof("number of client CA certificates: %v", len(clientCACerts))
+
 		listenAddr = cfg.TLS.ListenAddr
 	} else {
 		serverKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
