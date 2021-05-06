@@ -9,3 +9,6 @@
 # Executable files
 cmd/estserver/estserver
 cmd/estclient/estclient
+
+# local stuff
+local/

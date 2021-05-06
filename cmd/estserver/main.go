@@ -138,8 +138,6 @@ func main() {
 			clientCACerts = append(clientCACerts, certs...)
 		}
 
-		logger.Infof("number of client CA certificates: %v", len(clientCACerts))
-
 		listenAddr = cfg.TLS.ListenAddr
 	} else {
 		serverKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -181,6 +179,8 @@ func main() {
 		clientCACerts = []*x509.Certificate{cacerts[len(cacerts)-1]}
 	}
 
+	
+
 	var tlsCerts [][]byte
 	for i := range serverCerts {
 		tlsCerts = append(tlsCerts, serverCerts[i].Raw)
@@ -203,6 +203,13 @@ func main() {
 			},
 		},
 		ClientCAs: clientCAs,
+	}
+
+	// ART: if CA client certs are given, force the tls client authentication
+	logger.Infof("number of client CA certificates: %v", len(clientCACerts))
+	if len(clientCACerts) > 0 {
+		logger.Infof("force TLS CA cert authentication")
+		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	// Create a password function which requires a HTTP Basic Authentication
@@ -245,7 +252,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP)
 
-	logger.Infof("Starting EST server FOR NON-PRODUCTION USE ONLY - patched by arlotito - https://github.com/arlotito/est")
+	logger.Infof("DEV - Starting EST server FOR NON-PRODUCTION USE ONLY - https://github.com/arlotito/est")
 
 	go s.ListenAndServeTLS("", "")
 
