@@ -211,7 +211,6 @@ var optDefs = map[string]option{
 		defaultValue: "",
 	},
 	rootOutFlag: {
-		argFmt:       pathFmt,
 		desc:         "output root CA certificate only",
 		defaultValue: false,
 	},
