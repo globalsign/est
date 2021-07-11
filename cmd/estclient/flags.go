@@ -83,6 +83,8 @@ const (
 	postalCodeFlag         = "postalcode"
 	provinceFlag           = "province"
 	rootOutFlag            = "rootout"
+	rootsOnlyFlag          = "roots"
+	intermediatesOnlyFlag  = "intermediates"
 	separatorFlag          = "separator"
 	serialNumberFlag       = "sn"
 	serverFlag             = "server"
@@ -211,7 +213,15 @@ var optDefs = map[string]option{
 		defaultValue: "",
 	},
 	rootOutFlag: {
-		desc:         "output root CA certificate only",
+		desc:         fmt.Sprintf("output the first root CA certificate only; this flag will be deprecated in favor of -%s, which is preferred", rootsOnlyFlag),
+		defaultValue: false,
+	},
+	rootsOnlyFlag: {
+		desc:         "only output root (self-signed) certificates",
+		defaultValue: false,
+	},
+	intermediatesOnlyFlag: {
+		desc:         "only output intermediate certificates",
 		defaultValue: false,
 	},
 	separatorFlag: {
