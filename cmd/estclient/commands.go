@@ -97,6 +97,8 @@ func init() {
 				outFlag,
 				passwordFlag,
 				rootOutFlag,
+				rootsOnlyFlag,
+				intermediatesOnlyFlag,
 				separatorFlag,
 				serverFlag,
 				usernameFlag,
