@@ -24,6 +24,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/globalsign/pemfile"
 )
@@ -65,6 +66,9 @@ func cacerts(w io.Writer, set *flag.FlagSet) error {
 	if prefix := cfg.FlagValue(separateOutFlag); len(prefix) > 0 {
 		var filename string
 		subca_idx := 1
+
+		// sort by NotBefore to provide a predictable and stable index
+		sort.SliceStable(certs, func(i, j int) bool { return certs[i].NotBefore.Before(certs[j].NotBefore) })
 
 		for _, cert := range certs {
 			if cert == root {
