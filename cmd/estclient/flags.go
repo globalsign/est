@@ -83,6 +83,7 @@ const (
 	postalCodeFlag         = "postalcode"
 	provinceFlag           = "province"
 	rootOutFlag            = "rootout"
+	separateOutFlag        = "sepout"
 	separatorFlag          = "separator"
 	serialNumberFlag       = "sn"
 	serverFlag             = "server"
@@ -213,6 +214,12 @@ var optDefs = map[string]option{
 	rootOutFlag: {
 		desc:         "output root CA certificate only",
 		defaultValue: false,
+	},
+	separateOutFlag: {
+		argFmt:       stringFmt,
+		defaultLabel: "none",
+		desc:         "write every CA to a separete file with a given prefix",
+		defaultValue: "",
 	},
 	separatorFlag: {
 		argFmt:       stringFmt,
