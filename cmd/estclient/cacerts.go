@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"sort"
 
 	"github.com/globalsign/pemfile"
 )
@@ -52,28 +54,57 @@ func cacerts(w io.Writer, set *flag.FlagSet) error {
 		return fmt.Errorf("failed to get CA certificates: %v", err)
 	}
 
-	if cfg.FlagWasPassed(rootOutFlag) {
-		var root *x509.Certificate
+	// find root CA
+	var root *x509.Certificate
+	for _, cert := range certs {
+		if bytes.Equal(cert.RawSubject, cert.RawIssuer) && cert.CheckSignatureFrom(cert) == nil {
+			root = cert
+			break
+		}
+	}
+
+	if prefix := cfg.FlagValue(separateOutFlag); len(prefix) > 0 {
+		var filename string
+		subca_idx := 1
+
+		// sort by NotBefore to provide a predictable and stable index
+		sort.SliceStable(certs, func(i, j int) bool { return certs[i].NotBefore.Before(certs[j].NotBefore) })
+
 		for _, cert := range certs {
-			if bytes.Equal(cert.RawSubject, cert.RawIssuer) && cert.CheckSignatureFrom(cert) == nil {
-				root = cert
-				break
+			if cert == root {
+				filename = fmt.Sprintf("%s-root-ca.pem", prefix)
+			} else {
+				filename = fmt.Sprintf("%s-sub-ca-%d.pem", prefix, subca_idx)
+				subca_idx++
+			}
+
+			out, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %v", err)
+			}
+			defer out.Close()
+
+			if err := pemfile.WriteCert(out, cert); err != nil {
+				return fmt.Errorf("failed to write CA certificate: %v", err)
 			}
 		}
-		if root == nil {
-			return errors.New("failed to find a root certificate in CA certificates")
+	} else {
+		if cfg.FlagWasPassed(rootOutFlag) {
+			if root == nil {
+				return errors.New("failed to find a root certificate in CA certificates")
+			}
+			certs = []*x509.Certificate{root}
 		}
-		certs = []*x509.Certificate{root}
-	}
 
-	out, closeFunc, err := maybeRedirect(w, cfg.FlagValue(outFlag), 0666)
-	if err != nil {
-		return err
-	}
-	defer closeFunc()
+		out, closeFunc, err := maybeRedirect(w, cfg.FlagValue(outFlag), 0666)
+		if err != nil {
+			return err
+		}
+		defer closeFunc()
 
-	if err := pemfile.WriteCerts(out, certs); err != nil {
-		return fmt.Errorf("failed to write CA certificates: %v", err)
+		if err := pemfile.WriteCerts(out, certs); err != nil {
+			return fmt.Errorf("failed to write CA certificates: %v", err)
+		}
 	}
 
 	return nil
