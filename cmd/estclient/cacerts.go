@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"strings"
 
 	"github.com/globalsign/pemfile"
 )
@@ -90,14 +92,37 @@ func cacerts(w io.Writer, set *flag.FlagSet) error {
 		return errors.New("failed to find a root certificate in CA certificates")
 	}
 
-	out, closeFunc, err := maybeRedirect(w, cfg.FlagValue(outFlag), 0666)
-	if err != nil {
-		return err
-	}
-	defer closeFunc()
+	if cfg.FlagWasPassed(separateOutFlag) {
+		var prefix string
+		if prefix = cfg.FlagValue(outFlag); len(prefix) > 0 {
+			prefix = strings.TrimSuffix(prefix, ".pem") + "-"
+		} else {
+			prefix = "ca-"
+		}
 
-	if err := pemfile.WriteCerts(out, certs); err != nil {
-		return fmt.Errorf("failed to write CA certificates: %v", err)
+		for i, cert := range certs {
+			filename := fmt.Sprintf("%s%d.pem", prefix, i+1)
+
+			out, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+			if err != nil {
+				return fmt.Errorf("failed to create output file: %v", err)
+			}
+			defer out.Close()
+
+			if err := pemfile.WriteCert(out, cert); err != nil {
+				return fmt.Errorf("failed to write CA certificate: %v", err)
+			}
+		}
+	} else {
+		out, closeFunc, err := maybeRedirect(w, cfg.FlagValue(outFlag), 0666)
+		if err != nil {
+			return err
+		}
+		defer closeFunc()
+
+		if err := pemfile.WriteCerts(out, certs); err != nil {
+			return fmt.Errorf("failed to write CA certificates: %v", err)
+		}
 	}
 
 	return nil

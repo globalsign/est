@@ -79,6 +79,7 @@ const (
 	organizationFlag       = "org"
 	organizationalUnitFlag = "ou"
 	outFlag                = "out"
+	separateOutFlag        = "separate"
 	passwordFlag           = "pass"
 	postalCodeFlag         = "postalcode"
 	provinceFlag           = "province"
@@ -205,6 +206,10 @@ var optDefs = map[string]option{
 		defaultLabel: "stdout",
 		desc:         "output file",
 		defaultValue: "",
+	},
+	separateOutFlag: {
+		desc:         fmt.Sprintf("write every CA certificate to a separate file with optional prefix specified by -%s", outFlag),
+		defaultValue: false,
 	},
 	passwordFlag: {
 		argFmt:       stringFmt,
