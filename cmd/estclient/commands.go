@@ -95,6 +95,7 @@ func init() {
 				insecureFlag,
 				keyFlag,
 				outFlag,
+				separateOutFlag,
 				passwordFlag,
 				rootOutFlag,
 				rootsOnlyFlag,
