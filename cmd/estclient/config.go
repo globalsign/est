@@ -140,18 +140,22 @@ func (cfg *config) MakeContext() (context.Context, context.CancelFunc) {
 // makeClient builds an EST client from a configuration file, overriding the
 // values with command line options, if applicable.
 func (cfg *config) MakeClient() (*est.Client, error) {
+	httpCli := est.NewHttpClient(est.HttpClientBuilder{
+		ExplicitAnchor:     cfg.explicitAnchor,
+		ImplicitAnchor:     cfg.implicitAnchor,
+		PrivateKey:         cfg.openPrivateKey,
+		Certificates:       cfg.certificates,
+		InsecureSkipVerify: cfg.insecure,
+	})
+
 	client := est.Client{
 		Host:                  cfg.Server,
+		HttpClient:            httpCli,
 		AdditionalPathSegment: cfg.APS,
 		AdditionalHeaders:     cfg.AdditionalHeaders,
-		ExplicitAnchor:        cfg.explicitAnchor,
-		ImplicitAnchor:        cfg.implicitAnchor,
 		HostHeader:            cfg.HostHeader,
-		PrivateKey:            cfg.openPrivateKey,
-		Certificates:          cfg.certificates,
 		Username:              cfg.Username,
 		Password:              cfg.Password,
-		InsecureSkipVerify:    cfg.insecure,
 	}
 
 	// Host is the only required field for all operations.

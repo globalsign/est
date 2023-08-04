@@ -403,11 +403,16 @@ func TestReenroll(t *testing.T) {
 			}
 
 			// Reenroll.
-			client.PrivateKey = tc.key
-			client.Certificates = append([]*x509.Certificate{got}, cacerts...)
+			clientCrts := append([]*x509.Certificate{got}, cacerts...)
 			if tc.certs != nil {
-				client.Certificates = tc.certs
+				clientCrts = tc.certs
 			}
+
+			httpCli := est.NewHttpClient(est.HttpClientBuilder{
+				PrivateKey:   tc.key,
+				Certificates: clientCrts,
+			})
+			client.HttpClient = httpCli
 			csr = mustCreateCertificateRequest(t, tc.key, tc.rcsr.Subject.CommonName, tc.rcsr.DNSNames)
 
 			_, err = client.Reenroll(ctx, csr)
@@ -956,12 +961,16 @@ func newTestServer(t *testing.T) (*httptest.Server, func() *est.Client) {
 		var rootCAs = x509.NewCertPool()
 		rootCAs.AddCert(caCerts[len(caCerts)-1])
 
-		c := est.Client{
-			Host:           strings.TrimPrefix(s.URL, "https://"),
+		httpCli := est.NewHttpClient(est.HttpClientBuilder{
 			ExplicitAnchor: rootCAs,
-			HostHeader:     testDomain + ":" + strings.Split(s.URL, ":")[2],
-			Username:       "testuser",
-			Password:       "xyzzy",
+		})
+
+		c := est.Client{
+			HttpClient: httpCli,
+			Host:       strings.TrimPrefix(s.URL, "https://"),
+			HostHeader: testDomain + ":" + strings.Split(s.URL, ":")[2],
+			Username:   "testuser",
+			Password:   "xyzzy",
 		}
 
 		return &c
