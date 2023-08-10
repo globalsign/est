@@ -131,7 +131,7 @@ func TestCSRAttrs(t *testing.T) {
 			s, newTestClient := newTestServer(t)
 			defer s.Close()
 
-			client := newTestClient()
+			client, _ := newTestClient()
 			client.AdditionalPathSegment = tc.aps
 
 			// Get CSR attributes.
@@ -211,7 +211,7 @@ func TestEnroll(t *testing.T) {
 			s, newTestClient := newTestServer(t)
 			defer s.Close()
 
-			client := newTestClient()
+			client, _ := newTestClient()
 
 			// Get CA certificates before setting additional path segment,
 			// which may otherwise trigger errors.
@@ -294,19 +294,20 @@ func TestReenroll(t *testing.T) {
 	s, newTestClient := newTestServer(t)
 	defer s.Close()
 
-	client := newTestClient()
+	client, rootCAs := newTestClient()
 
 	altKey := mustGenerateECPrivateKey(t)
 
 	var testcases = []struct {
-		name    string
-		aps     string
-		ecsr    *x509.CertificateRequest
-		rcsr    *x509.CertificateRequest
-		key     interface{}
-		certs   []*x509.Certificate
-		status  int
-		errText string
+		name       string
+		aps        string
+		caCertPool *x509.CertPool
+		ecsr       *x509.CertificateRequest
+		rcsr       *x509.CertificateRequest
+		key        interface{}
+		certs      []*x509.Certificate
+		status     int
+		errText    string
 	}{
 		{
 			name: "OK/ECDSA",
@@ -409,8 +410,9 @@ func TestReenroll(t *testing.T) {
 			}
 
 			httpCli := est.NewHttpClient(est.HttpClientBuilder{
-				PrivateKey:   tc.key,
-				Certificates: clientCrts,
+				PrivateKey:     tc.key,
+				Certificates:   clientCrts,
+				ExplicitAnchor: rootCAs,
 			})
 			client.HttpClient = httpCli
 			csr = mustCreateCertificateRequest(t, tc.key, tc.rcsr.Subject.CommonName, tc.rcsr.DNSNames)
@@ -481,7 +483,7 @@ func TestServerKeyGen(t *testing.T) {
 			s, newTestClient := newTestServer(t)
 			defer s.Close()
 
-			client := newTestClient()
+			client, _ := newTestClient()
 
 			// Request certificate and private key.
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -589,7 +591,7 @@ func TestTPMEnroll(t *testing.T) {
 			s, newTestClient := newTestServer(t)
 			defer s.Close()
 
-			client := newTestClient()
+			client, _ := newTestClient()
 
 			// Get CA certificates before setting additional path segment,
 			// which may otherwise trigger errors.
@@ -849,7 +851,7 @@ func TestServerErrors(t *testing.T) {
 	}
 }
 
-func newTestServer(t *testing.T) (*httptest.Server, func() *est.Client) {
+func newTestServer(t *testing.T) (*httptest.Server, func() (*est.Client, *x509.CertPool)) {
 	t.Helper()
 
 	// Create new transient CA.
@@ -957,7 +959,7 @@ func newTestServer(t *testing.T) (*httptest.Server, func() *est.Client) {
 
 	s.StartTLS()
 
-	return s, func() *est.Client {
+	return s, func() (*est.Client, *x509.CertPool) {
 		var rootCAs = x509.NewCertPool()
 		rootCAs.AddCert(caCerts[len(caCerts)-1])
 
@@ -973,7 +975,7 @@ func newTestServer(t *testing.T) (*httptest.Server, func() *est.Client) {
 			Password:   "xyzzy",
 		}
 
-		return &c
+		return &c, rootCAs
 	}
 }
 
