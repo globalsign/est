@@ -38,8 +38,8 @@ import (
 
 	"github.com/globalsign/pemfile"
 
-	"github.com/globalsign/est"
-	"github.com/globalsign/est/internal/tpm"
+	"github.com/haritzsaiz/est"
+	"github.com/haritzsaiz/est/internal/tpm"
 )
 
 // MockCA is a mock, non-production certificate authority useful for testing
@@ -87,9 +87,9 @@ func (ca *MockCA) CACerts(
 
 // CSRAttrs returns an empty sequence of CSR attributes, unless the additional
 // path segment is:
-//  - "csrattrs", in which case it returns the same example sequence described
-//    in RFC7030 4.5.2; or
-//  - "triggererrors", in which case an error is returned for testing purposes.
+//   - "csrattrs", in which case it returns the same example sequence described
+//     in RFC7030 4.5.2; or
+//   - "triggererrors", in which case an error is returned for testing purposes.
 func (ca *MockCA) CSRAttrs(
 	ctx context.Context,
 	aps string,

@@ -30,11 +30,11 @@
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/globalsign/est/compare/v1.0.6...HEAD
-[1.0.6]: https://github.com/globalsign/est/compare/v1.0.5...v1.0.6
-[1.0.5]: https://github.com/globalsign/est/compare/v1.0.4...v1.0.5
-[1.0.4]: https://github.com/globalsign/est/compare/v1.0.3...v1.0.4
-[1.0.3]: https://github.com/globalsign/est/compare/v1.0.2...v1.0.3
-[1.0.2]: https://github.com/globalsign/est/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/globalsign/est/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/globalsign/est/releases/tag/v1.0.0
+[Unreleased]: https://github.com/haritzsaiz/est/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/haritzsaiz/est/compare/v1.0.5...v1.0.6
+[1.0.5]: https://github.com/haritzsaiz/est/compare/v1.0.4...v1.0.5
+[1.0.4]: https://github.com/haritzsaiz/est/compare/v1.0.3...v1.0.4
+[1.0.3]: https://github.com/haritzsaiz/est/compare/v1.0.2...v1.0.3
+[1.0.2]: https://github.com/haritzsaiz/est/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/haritzsaiz/est/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/haritzsaiz/est/releases/tag/v1.0.0

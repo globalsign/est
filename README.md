@@ -1,8 +1,8 @@
 # est
 
-[![GoDoc](https://godoc.org/github.com/globalsign/est?status.svg)](https://godoc.org/github.com/globalsign/est)
-[![Build Status](https://github.com/globalsign/est/actions/workflows/go.yml/badge.svg)](https://github.com/globalsign/est/actions/workflows/go.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/globalsign/est)](https://goreportcard.com/report/github.com/globalsign/est)
+[![GoDoc](https://godoc.org/github.com/haritzsaiz/est?status.svg)](https://godoc.org/github.com/haritzsaiz/est)
+[![Build Status](https://github.com/haritzsaiz/est/actions/workflows/go.yml/badge.svg)](https://github.com/haritzsaiz/est/actions/workflows/go.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/haritzsaiz/est)](https://goreportcard.com/report/github.com/haritzsaiz/est)
 
 An implementation of the Enrollment over Secure Transport (EST) certificate
 enrollment protocol as defined by [RFC7030](https://tools.ietf.org/html/rfc7030).
@@ -30,8 +30,8 @@ section 24 of the Trusted Platform Module 2.0 Library specification.
 
 ## Installation
 
-    go install github.com/globalsign/est/cmd/estserver@latest
-    go install github.com/globalsign/est/cmd/estclient@latest
+    go install github.com/haritzsaiz/est/cmd/estserver@latest
+    go install github.com/haritzsaiz/est/cmd/estclient@latest
 
 ## Quickstart
 

@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/globalsign/est"
+	"github.com/haritzsaiz/est"
 )
 
 func TestCSRAttrsMarshal(t *testing.T) {

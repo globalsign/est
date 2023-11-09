@@ -1,4 +1,4 @@
-module github.com/globalsign/est
+module github.com/haritzsaiz/est
 
 go 1.13
 
