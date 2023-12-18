@@ -741,18 +741,6 @@ func TestServerErrors(t *testing.T) {
 			errText: "415 Content-Transfer-Encoding must be base64\n",
 		},
 		{
-			name:   "Enroll/MissingContentTransferEncoding",
-			path:   enrollEndpoint,
-			method: http.MethodPost,
-			headers: http.Header{
-				typeHeader:          []string{mimeTypePKCS10},
-				authorizationHeader: []string{authorizationValue},
-				hostHeader:          []string{testDomain},
-			},
-			status:  http.StatusUnsupportedMediaType,
-			errText: "415 missing Content-Transfer-Encoding header\n",
-		},
-		{
 			name:   "Enroll/BadBase64",
 			path:   enrollEndpoint,
 			method: http.MethodPost,

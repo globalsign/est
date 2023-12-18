@@ -258,10 +258,10 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 
 		// Check content-transfer-encoding is as expected, and read the part
 		// body.
-		if ce := part.Header.Get(transferEncodingHeader); ce == "" {
-			return nil, nil, fmt.Errorf("missing %s header", transferEncodingHeader)
-		} else if strings.ToUpper(ce) != strings.ToUpper(encodingTypeBase64) {
-			return nil, nil, fmt.Errorf("unexpected %s: %s", transferEncodingHeader, ce)
+		if ce := part.Header.Get(transferEncodingHeader); ce != "" {
+		    if strings.ToUpper(ce) != strings.ToUpper(encodingTypeBase64) {
+			    return nil, nil, fmt.Errorf("unexpected %s: %s", transferEncodingHeader, ce)
+            }
 		}
 
 		// Process based on the part's content-type. Per RFC7030 4.4.2, if
