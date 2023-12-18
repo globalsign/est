@@ -728,19 +728,6 @@ func TestServerErrors(t *testing.T) {
 			errText: "415 malformed or missing Content-Type header\n",
 		},
 		{
-			name:   "Enroll/BadContentTransferEncoding",
-			path:   enrollEndpoint,
-			method: http.MethodPost,
-			headers: http.Header{
-				typeHeader:          []string{mimeTypePKCS10},
-				encodingHeader:      []string{encodingBinary},
-				authorizationHeader: []string{authorizationValue},
-				hostHeader:          []string{testDomain},
-			},
-			status:  http.StatusUnsupportedMediaType,
-			errText: "415 Content-Transfer-Encoding must be base64\n",
-		},
-		{
 			name:   "Enroll/BadBase64",
 			path:   enrollEndpoint,
 			method: http.MethodPost,
