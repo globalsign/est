@@ -96,6 +96,18 @@ type Client struct {
 	// verified in some out-of-band manner before any further EST operations with
 	// that server are performed.
 	InsecureSkipVerify bool
+
+	// httpc handles all EST http requests/responses
+	httpc *http.Client
+
+	// TLS-unique channel binding value is computed during the TLS handshake.
+	// RFC 7030 - section 3.5 recommends including it in the CSR.
+	//
+	// This field gets populated during CACert() operation.
+	//
+	// And because a new TLS connection results in a new TLS-unique value,
+	// make sure the same http client is used when (re)enrolling certificates as in CACerts().
+	tlsUnique []byte
 }
 
 // Client constants.
@@ -111,7 +123,11 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 		return nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	if c.httpc == nil {
+		c.makeHTTPClient()
+	}
+
+	resp, err := c.httpc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -125,6 +141,8 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 		return nil, err
 	}
 
+	c.tlsUnique = resp.TLS.TLSUnique
+
 	return readCertsResponse(resp.Body)
 }
 
@@ -135,7 +153,11 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		return CSRAttrs{}, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	if c.httpc == nil {
+		c.makeHTTPClient()
+	}
+
+	resp, err := c.httpc.Do(req)
 	if err != nil {
 		return CSRAttrs{}, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -177,19 +199,29 @@ func (c *Client) Reenroll(ctx context.Context, r *x509.CertificateRequest) (*x50
 
 // Enroll requests a new certificate.
 func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, renew bool) (*x509.Certificate, error) {
-	reqBody := ioutil.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
+	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
 
 	var endpoint = enrollEndpoint
 	if renew {
 		endpoint = reenrollEndpoint
+		c.makeHTTPClient()
 	}
+
+	// todo:
+	// 1.	csrattrs => if popEnforced => include it
+	// 2.	then recreate the CSR : original + challenge password (both enroll or reenroll)
+	// todo: write method that takes the csr content and append the challenge password before signing the whole thing
 
 	req, err := c.newRequest(ctx, http.MethodPost, endpoint, mimeTypePKCS10, encodingTypeBase64, mimeTypePKCS7, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	if c.httpc == nil {
+		c.makeHTTPClient()
+	}
+
+	resp, err := c.httpc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -216,7 +248,11 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 		return nil, nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	if c.httpc == nil {
+		c.makeHTTPClient()
+	}
+
+	resp, err := c.httpc.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -260,7 +296,7 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 		// body.
 		if ce := part.Header.Get(transferEncodingHeader); ce == "" {
 			return nil, nil, fmt.Errorf("missing %s header", transferEncodingHeader)
-		} else if strings.ToUpper(ce) != strings.ToUpper(encodingTypeBase64) {
+		} else if !strings.EqualFold(ce, encodingTypeBase64) {
 			return nil, nil, fmt.Errorf("unexpected %s: %s", transferEncodingHeader, ce)
 		}
 
@@ -350,7 +386,11 @@ func (c *Client) TPMEnroll(
 		return nil, nil, nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	if c.httpc == nil {
+		c.makeHTTPClient()
+	}
+
+	resp, err := c.httpc.Do(req)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -542,7 +582,7 @@ func (c *Client) uri(endpoint string) string {
 
 // makeHTTPClient makes and configures an HTTP client for connecting to an
 // EST server.
-func (c *Client) makeHTTPClient() *http.Client {
+func (c *Client) makeHTTPClient() {
 	var rootCAs *x509.CertPool
 	if c.ExplicitAnchor != nil {
 		rootCAs = c.ExplicitAnchor
@@ -558,7 +598,7 @@ func (c *Client) makeHTTPClient() *http.Client {
 		}
 	}
 
-	return &http.Client{
+	c.httpc = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				RootCAs:            rootCAs,
