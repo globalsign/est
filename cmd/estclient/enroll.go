@@ -129,11 +129,11 @@ func enrollCommon(w io.Writer, set *flag.FlagSet, renew, keygen bool) error {
 	var cert *x509.Certificate
 	var key []byte
 	if renew {
-		cert, err = client.Reenroll(ctx, csr)
+		cert, err = client.Reenroll(ctx, csr.Raw)
 	} else if keygen {
-		cert, key, err = client.ServerKeyGen(ctx, csr)
+		cert, key, err = client.ServerKeyGen(ctx, csr.Raw)
 	} else {
-		cert, err = client.Enroll(ctx, csr)
+		cert, err = client.Enroll(ctx, csr.Raw)
 	}
 	if err != nil {
 		return fmt.Errorf("failed to get certificate: %v", err)
