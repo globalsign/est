@@ -32,6 +32,37 @@ func TestNewCSR(t *testing.T) {
 	}
 }
 
+func TestNewCSRWithTlsUnique(t *testing.T) {
+	// arrange
+	csrFilePath := "./test-cp.der"
+	subjectCN := "cn-field"
+	priv, err := getPrivateKey()
+	tlsUnique := []byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205}
+	tlsUnique64 := base64Encode([]byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205})
+
+	if err != nil {
+		t.Error(err)
+	}
+	// act
+	csr, err := NewCSRWithTlsUnique(subjectCN, tlsUnique, priv)
+
+	// assert
+	if err == nil && csr != nil {
+		if _, err := os.Stat(csrFilePath); err != nil {
+			t.Error(err)
+		}
+
+		if csr.Subject.CommonName != subjectCN {
+			t.Error("Expected subject common name is : cn-field, but instead got : ", csr.Subject.CommonName)
+		}
+		for i, b := range tlsUnique64 {
+			if b != csr.Extensions[0].Value[i] {
+				t.Errorf("%v was expected,\n%v got instead", tlsUnique, csr.Extensions[0])
+			}
+		}
+	}
+}
+
 func getPrivateKey() (*rsa.PrivateKey, error) {
 	pemString := `-----BEGIN PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC1lvKSFP20Z93y
