@@ -91,6 +91,34 @@ func TestNewCSRWithTlsUniqueAttribute(t *testing.T) {
 	}
 }
 
+func TestNewCSRWithChallengePassword(t *testing.T) {
+	// arrange
+	csrFilePath := "./test-cp.der"
+	subjectCN := "cn-field"
+	priv, err := getPrivateKey()
+	tlsUnique := []byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205}
+	// tlsUnique64 := base64Encode([]byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205})
+	// cpOID := asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
+	// expectedCsrAttributes := []pkix.AttributeTypeAndValueSET{{Type: cpOID, Value: [][]pkix.AttributeTypeAndValue{{pkix.AttributeTypeAndValue{Type: cpOID, Value: tlsUnique64}}}}}
+
+	if err != nil {
+		t.Error(err)
+	}
+	// act
+	csr, err := NewCSRWithChallengePassword(subjectCN, tlsUnique, priv)
+
+	// assert
+	if err == nil && csr != nil {
+		if _, err := os.Stat(csrFilePath); err != nil {
+			t.Error(err)
+		}
+
+		if csr.Subject.CommonName != subjectCN {
+			t.Error("Expected subject common name is : cn-field, but instead got : ", csr.Subject.CommonName)
+		}
+	}
+}
+
 func getPrivateKey() (*rsa.PrivateKey, error) {
 	pemString := `-----BEGIN PRIVATE KEY-----
 MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC1lvKSFP20Z93y
