@@ -1,120 +1,54 @@
 package est
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/pem"
 	"os"
 	"testing"
 )
 
-func TestNewCSR(t *testing.T) {
-	// arrange
-	csrFilePath := "./test.der"
-	subjectCN := "cn-field"
-	priv, err := getPrivateKey()
-
-	if err != nil {
-		t.Error(err)
-	}
-	// act
-	csr, err := NewCSR(subjectCN, priv)
-
-	// assert
-	if err == nil && csr != nil {
-		if _, err := os.Stat(csrFilePath); err != nil {
-			t.Error(err)
-		}
-
-		if csr.Subject.CommonName != subjectCN {
-			t.Error("Expected subject common name is : cn-field, but instead got : ", csr.Subject.CommonName)
-		}
-	}
-}
-
-func TestNewCSRWithTlsUnique(t *testing.T) {
+func TestCreateCertificateRequest(t *testing.T) {
 	// arrange
 	csrFilePath := "./test-cp.der"
 	subjectCN := "cn-field"
 	priv, err := getPrivateKey()
 	tlsUnique := []byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205}
-	tlsUnique64 := base64Encode([]byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205})
+	tlsUnique64 := base64Encode(tlsUnique)
 
 	if err != nil {
 		t.Error(err)
 	}
-	// act
-	csr, err := NewCSRWithTlsUnique(subjectCN, tlsUnique, priv)
 
-	// assert
-	if err == nil && csr != nil {
-		if _, err := os.Stat(csrFilePath); err != nil {
-			t.Error(err)
-		}
-
-		if csr.Subject.CommonName != subjectCN {
-			t.Error("Expected subject common name is : cn-field, but instead got : ", csr.Subject.CommonName)
-		}
-		for i, b := range tlsUnique64 {
-			if b != csr.Extensions[0].Value[i] {
-				t.Errorf("%v was expected,\n%v got instead", tlsUnique, csr.Extensions[0])
-			}
-		}
-	}
-}
-
-func TestNewCSRWithTlsUniqueAttribute(t *testing.T) {
-	// arrange
-	csrFilePath := "./test-cp.der"
-	subjectCN := "cn-field"
-	priv, err := getPrivateKey()
-	tlsUnique := []byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205}
-	// tlsUnique64 := base64Encode([]byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205})
-	// cpOID := asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
-	// expectedCsrAttributes := []pkix.AttributeTypeAndValueSET{{Type: cpOID, Value: [][]pkix.AttributeTypeAndValue{{pkix.AttributeTypeAndValue{Type: cpOID, Value: tlsUnique64}}}}}
+	_, err = x509.CreateCertificateRequest(
+		rand.Reader,
+		&x509.CertificateRequest{
+			Subject: pkix.Name{CommonName: subjectCN},
+		},
+		priv)
 
 	if err != nil {
 		t.Error(err)
 	}
+
+	req := &CertificateRequest{
+		CertificateRequest: x509.CertificateRequest{
+			Subject: pkix.Name{CommonName: "cn-field"},
+		},
+		ChallengePassword: string(tlsUnique64),
+	}
+
 	// act
-	csr, err := NewCSRWithTlsUniqueAttribute(subjectCN, tlsUnique, priv)
+	csrBs, err := CreateCertificateRequest(rand.Reader, req, priv)
+
+	os.WriteFile(csrFilePath, csrBs, os.ModePerm)
 
 	// assert
-	if err == nil && csr != nil {
+	if err == nil && csrBs != nil {
 		if _, err := os.Stat(csrFilePath); err != nil {
 			t.Error(err)
-		}
-
-		if csr.Subject.CommonName != subjectCN {
-			t.Error("Expected subject common name is : cn-field, but instead got : ", csr.Subject.CommonName)
-		}
-	}
-}
-
-func TestNewCSRWithChallengePassword(t *testing.T) {
-	// arrange
-	csrFilePath := "./test-cp.der"
-	subjectCN := "cn-field"
-	priv, err := getPrivateKey()
-	tlsUnique := []byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205}
-	// tlsUnique64 := base64Encode([]byte{84, 109, 241, 191, 39, 122, 251, 247, 30, 221, 0, 205})
-	// cpOID := asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
-	// expectedCsrAttributes := []pkix.AttributeTypeAndValueSET{{Type: cpOID, Value: [][]pkix.AttributeTypeAndValue{{pkix.AttributeTypeAndValue{Type: cpOID, Value: tlsUnique64}}}}}
-
-	if err != nil {
-		t.Error(err)
-	}
-	// act
-	csr, err := NewCSRWithChallengePassword(subjectCN, tlsUnique, priv)
-
-	// assert
-	if err == nil && csr != nil {
-		if _, err := os.Stat(csrFilePath); err != nil {
-			t.Error(err)
-		}
-
-		if csr.Subject.CommonName != subjectCN {
-			t.Error("Expected subject common name is : cn-field, but instead got : ", csr.Subject.CommonName)
 		}
 	}
 }

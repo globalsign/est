@@ -1,12 +1,23 @@
 package est
 
 import (
-	"crypto/rand"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
-	"os"
+	"errors"
+	"io"
 )
+
+type passwordChallengeAttribute struct {
+	Type  asn1.ObjectIdentifier
+	Value []string `asn1:"set"`
+}
+
+// The structures below are copied from the Go standard library x509 package.
 
 type publicKeyInfo struct {
 	Raw       asn1.RawContent
@@ -29,71 +40,60 @@ type certificateRequest struct {
 	SignatureValue     asn1.BitString
 }
 
-func NewCSR(subjectCN string, key interface{}) (*x509.CertificateRequest, error) {
-	csr, err := x509.CreateCertificateRequest(
-		rand.Reader,
-		&x509.CertificateRequest{
-			Subject: pkix.Name{CommonName: "cn-field"},
-		},
-		key)
+type CertificateRequest struct {
+	x509.CertificateRequest
 
-	if err != nil {
-		return nil, err
-	}
-
-	os.WriteFile("./test.der", csr, os.ModePerm)
-
-	return x509.ParseCertificateRequest(csr)
+	ChallengePassword string
 }
 
-// Adds challenge password as an extension (and not as an attribute). Very likely to be rejected by the CA
-func NewCSRWithTlsUnique(subjectCN string, tlsUnique []byte, key interface{}) (*x509.CertificateRequest, error) {
-	tlsUnique64 := base64Encode(tlsUnique)
-	csr, err := x509.CreateCertificateRequest(
-		rand.Reader,
-		&x509.CertificateRequest{
-			Subject: pkix.Name{CommonName: "cn-field"},
-			ExtraExtensions: []pkix.Extension{
-				{Id: asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}, Critical: false, Value: tlsUnique64},
-			},
-		},
-		key)
-
+// CreateCertificateRequest creates a new certificate request based on a template.
+// The resulting CSR is similar to x509 but optionally supports the
+// challengePassword attribute.
+//
+// See https://github.com/golang/go/issues/15995
+//
+// Current code comes from https://github.com/micromdm/scep/blob/main/cryptoutil/x509util/x509util.go#L58
+func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv interface{}) (csr []byte, err error) {
+	if template.ChallengePassword == "" {
+		// if no challenge password, return a stdlib CSR.
+		return x509.CreateCertificateRequest(rand, &template.CertificateRequest, priv)
+	}
+	csrBs, err := x509.CreateCertificateRequest(rand, &template.CertificateRequest, priv)
 	if err != nil {
 		return nil, err
 	}
 
-	os.WriteFile("./test-cp.der", csr, os.ModePerm)
-
-	return x509.ParseCertificateRequest(csr)
+	return addChallenge(
+		template.CertificateRequest.SignatureAlgorithm,
+		rand,
+		csrBs,
+		template.ChallengePassword,
+		priv.(crypto.Signer),
+	)
 }
 
-// Not working either, can't read the file and challenge password does not appear after parsing the CSR
-func NewCSRWithChallengePassword(subjectCN string, tlsUnique []byte, key interface{}) (*x509.CertificateRequest, error) {
-	// https://github.com/micromdm/scep/blob/4a4f8bc7f7bc34083b0737060db8ef7b55005472/scep/scep.go#L285
-	cpOID := asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
-	tlsUnique64 := base64Encode(tlsUnique)
+// add the challenge attribute to the CSR, then re-sign the raw csr.
+// not checking the crypto.Signer assertion because x509.CreateCertificateRequest already did that.
+func addChallenge(
+	templateSigAlgo x509.SignatureAlgorithm,
+	reader io.Reader,
+	csrBs []byte,
+	challenge string,
+	key crypto.Signer,
+) (csr []byte, err error) {
 
-	csrWithoutCp, err := x509.CreateCertificateRequest(
-		rand.Reader,
-		&x509.CertificateRequest{
-			Subject: pkix.Name{CommonName: "cn-field"},
-		},
-		key)
+	oidChallengePassword := oidChallengePassword
+	var hashFunc crypto.Hash
+	var sigAlgo pkix.AlgorithmIdentifier
 
-	if err != nil {
-		return nil, err
-	}
-
-	csr, err := x509.ParseCertificateRequest(csrWithoutCp)
+	hashFunc, sigAlgo, err = signingParamsForPublicKey(key.Public(), templateSigAlgo)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var req certificateRequest
-
-	rest, err := asn1.Unmarshal(csr.Raw, &req)
+	rest, err := asn1.Unmarshal(csrBs, &req)
 	if err != nil {
 		return nil, err
 	} else if len(rest) != 0 {
@@ -101,26 +101,24 @@ func NewCSRWithChallengePassword(subjectCN string, tlsUnique []byte, key interfa
 		return nil, err
 	}
 
-	challengePasswordAttribute := pkix.AttributeTypeAndValue{
-		Type:  cpOID,
-		Value: tlsUnique64,
+	passwordAttribute := passwordChallengeAttribute{
+		Type:  oidChallengePassword,
+		Value: []string{challenge},
 	}
-
-	cpBs, err := asn1.Marshal(challengePasswordAttribute)
-
+	b, err := asn1.Marshal(passwordAttribute)
 	if err != nil {
 		return nil, err
 	}
 
 	var rawAttribute asn1.RawValue
-	rest, err = asn1.Unmarshal(cpBs, &rawAttribute)
-
+	rest, err = asn1.Unmarshal(b, &rawAttribute)
 	if err != nil {
 		return nil, err
 	} else if len(rest) != 0 {
 		err = asn1.SyntaxError{Msg: "trailing data"}
 		return nil, err
 	}
+
 	// append attribute
 	req.TBSCSR.RawAttributes = append(req.TBSCSR.RawAttributes, rawAttribute)
 
@@ -138,42 +136,200 @@ func NewCSRWithChallengePassword(subjectCN string, tlsUnique []byte, key interfa
 	}
 	tbsCSR.Raw = tbsCSRContents
 
-	// marshal csr with challenge password
-	req2 := certificateRequest{
-		TBSCSR:             tbsCSR,
-		SignatureAlgorithm: req.SignatureAlgorithm,
-		SignatureValue:     req.SignatureValue,
+	h := hashFunc.New()
+	if _, err := h.Write(tbsCSRContents); err != nil {
+		return nil, err
 	}
 
-	csrBytes, err := asn1.Marshal(req2)
+	var signature []byte
+	signature, err = key.Sign(reader, h.Sum(nil), hashFunc)
 	if err != nil {
 		return nil, err
 	}
 
-	x509.ParseCertificateRequest(csrBytes)
-
-	os.WriteFile("./test-cp.der", csrBytes, os.ModePerm)
-
-	return x509.ParseCertificateRequest(csrBytes)
+	return asn1.Marshal(certificateRequest{
+		TBSCSR:             tbsCSR,
+		SignatureAlgorithm: sigAlgo,
+		SignatureValue: asn1.BitString{
+			Bytes:     signature,
+			BitLength: len(signature) * 8,
+		},
+	})
 }
 
-// Go stdlib does not support challenge password attribute. This function is useless.
-func NewCSRWithTlsUniqueAttribute(subjectCN string, tlsUnique []byte, key interface{}) (*x509.CertificateRequest, error) {
-	tlsUnique64 := base64Encode(tlsUnique)
-	cpOID := asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
-	csr, err := x509.CreateCertificateRequest(
-		rand.Reader,
-		&x509.CertificateRequest{
-			Subject:    pkix.Name{CommonName: "cn-field"},
-			Attributes: []pkix.AttributeTypeAndValueSET{{Type: cpOID, Value: [][]pkix.AttributeTypeAndValue{{pkix.AttributeTypeAndValue{Type: cpOID, Value: tlsUnique64}}}}},
-		},
-		key)
+// signingParamsForPublicKey returns the parameters to use for signing with
+// priv. If requestedSigAlgo is not zero then it overrides the default
+// signature algorithm.
+func signingParamsForPublicKey(pub interface{}, requestedSigAlgo x509.SignatureAlgorithm) (hashFunc crypto.Hash, sigAlgo pkix.AlgorithmIdentifier, err error) {
+	var pubType x509.PublicKeyAlgorithm
 
-	if err != nil {
-		return nil, err
+	switch pub := pub.(type) {
+	case *rsa.PublicKey:
+		pubType = x509.RSA
+		hashFunc = crypto.SHA256
+		sigAlgo.Algorithm = oidSignatureSHA256WithRSA
+		sigAlgo.Parameters = asn1NullRawValue
+
+	case *ecdsa.PublicKey:
+		pubType = x509.ECDSA
+
+		switch pub.Curve {
+		case elliptic.P224(), elliptic.P256():
+			hashFunc = crypto.SHA256
+			sigAlgo.Algorithm = oidSignatureECDSAWithSHA256
+		case elliptic.P384():
+			hashFunc = crypto.SHA384
+			sigAlgo.Algorithm = oidSignatureECDSAWithSHA384
+		case elliptic.P521():
+			hashFunc = crypto.SHA512
+			sigAlgo.Algorithm = oidSignatureECDSAWithSHA512
+		default:
+			err = errors.New("x509: unknown elliptic curve")
+		}
+
+	default:
+		err = errors.New("x509: only RSA and ECDSA keys supported")
 	}
 
-	os.WriteFile("./test-cp.der", csr, os.ModePerm)
+	if err != nil {
+		return
+	}
 
-	return x509.ParseCertificateRequest(csr)
+	if requestedSigAlgo == 0 {
+		return
+	}
+
+	found := false
+	for _, details := range signatureAlgorithmDetails {
+		if details.algo == requestedSigAlgo {
+			if details.pubKeyAlgo != pubType {
+				err = errors.New("x509: requested SignatureAlgorithm does not match private key type")
+				return
+			}
+			sigAlgo.Algorithm, hashFunc = details.oid, details.hash
+			if hashFunc == 0 {
+				err = errors.New("x509: cannot sign with hash function requested")
+				return
+			}
+			// copy x509.SignatureAlgorithm.isRSAPSS method
+			isRSAPSS := func() bool {
+				switch requestedSigAlgo {
+				case x509.SHA256WithRSAPSS, x509.SHA384WithRSAPSS, x509.SHA512WithRSAPSS:
+					return true
+				default:
+					return false
+				}
+			}
+			if isRSAPSS() {
+				sigAlgo.Parameters = rsaPSSParameters(hashFunc)
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		err = errors.New("x509: unknown SignatureAlgorithm")
+	}
+
+	return
+}
+
+var signatureAlgorithmDetails = []struct {
+	algo       x509.SignatureAlgorithm
+	oid        asn1.ObjectIdentifier
+	pubKeyAlgo x509.PublicKeyAlgorithm
+	hash       crypto.Hash
+}{
+	{x509.SHA256WithRSA, oidSignatureSHA256WithRSA, x509.RSA, crypto.SHA256},
+	{x509.SHA384WithRSA, oidSignatureSHA384WithRSA, x509.RSA, crypto.SHA384},
+	{x509.SHA512WithRSA, oidSignatureSHA512WithRSA, x509.RSA, crypto.SHA512},
+	{x509.SHA256WithRSAPSS, oidSignatureRSAPSS, x509.RSA, crypto.SHA256},
+	{x509.SHA384WithRSAPSS, oidSignatureRSAPSS, x509.RSA, crypto.SHA384},
+	{x509.SHA512WithRSAPSS, oidSignatureRSAPSS, x509.RSA, crypto.SHA512},
+	{x509.DSAWithSHA256, oidSignatureDSAWithSHA256, x509.DSA, crypto.SHA256},
+	{x509.ECDSAWithSHA256, oidSignatureECDSAWithSHA256, x509.ECDSA, crypto.SHA256},
+	{x509.ECDSAWithSHA384, oidSignatureECDSAWithSHA384, x509.ECDSA, crypto.SHA384},
+	{x509.ECDSAWithSHA512, oidSignatureECDSAWithSHA512, x509.ECDSA, crypto.SHA512},
+}
+
+var (
+	oidSignatureSHA256WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 11}
+	oidSignatureSHA384WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 12}
+	oidSignatureSHA512WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 13}
+	oidSignatureRSAPSS          = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 10}
+	oidSignatureDSAWithSHA256   = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 3, 2}
+	oidSignatureECDSAWithSHA256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}
+	oidSignatureECDSAWithSHA384 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3}
+	oidSignatureECDSAWithSHA512 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 4}
+
+	oidSHA256 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 1}
+	oidSHA384 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 2}
+	oidSHA512 = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 2, 3}
+
+	oidMGF1 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 8}
+
+	oidChallengePassword = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 7}
+)
+
+// added to Go in 1.9
+var asn1NullRawValue = asn1.RawValue{
+	Tag: 5, /* ASN.1 NULL */
+}
+
+// pssParameters reflects the parameters in an AlgorithmIdentifier that
+// specifies RSA PSS. See https://tools.ietf.org/html/rfc3447#appendix-A.2.3
+type pssParameters struct {
+	// The following three fields are not marked as
+	// optional because the default values specify SHA-1,
+	// which is no longer suitable for use in signatures.
+	Hash         pkix.AlgorithmIdentifier `asn1:"explicit,tag:0"`
+	MGF          pkix.AlgorithmIdentifier `asn1:"explicit,tag:1"`
+	SaltLength   int                      `asn1:"explicit,tag:2"`
+	TrailerField int                      `asn1:"optional,explicit,tag:3,default:1"`
+}
+
+// rsaPSSParameters returns an asn1.RawValue suitable for use as the Parameters
+// in an AlgorithmIdentifier that specifies RSA PSS.
+func rsaPSSParameters(hashFunc crypto.Hash) asn1.RawValue {
+	var hashOID asn1.ObjectIdentifier
+
+	switch hashFunc {
+	case crypto.SHA256:
+		hashOID = oidSHA256
+	case crypto.SHA384:
+		hashOID = oidSHA384
+	case crypto.SHA512:
+		hashOID = oidSHA512
+	}
+
+	params := pssParameters{
+		Hash: pkix.AlgorithmIdentifier{
+			Algorithm:  hashOID,
+			Parameters: asn1NullRawValue,
+		},
+		MGF: pkix.AlgorithmIdentifier{
+			Algorithm: oidMGF1,
+		},
+		SaltLength:   hashFunc.Size(),
+		TrailerField: 1,
+	}
+
+	mgf1Params := pkix.AlgorithmIdentifier{
+		Algorithm:  hashOID,
+		Parameters: asn1NullRawValue,
+	}
+
+	var err error
+	params.MGF.Parameters.FullBytes, err = asn1.Marshal(mgf1Params)
+	if err != nil {
+		panic(err)
+	}
+
+	serialized, err := asn1.Marshal(params)
+	if err != nil {
+		panic(err)
+	}
+
+	return asn1.RawValue{FullBytes: serialized}
 }
