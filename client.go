@@ -187,18 +187,18 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 }
 
 // Enroll requests a new certificate.
-func (c *Client) Enroll(ctx context.Context, r *x509.CertificateRequest) (*x509.Certificate, error) {
-	return c.enrollCommon(ctx, r, false)
+func (c *Client) Enroll(ctx context.Context, csr []byte) (*x509.Certificate, error) {
+	return c.enrollCommon(ctx, csr, false)
 }
 
 // Reenroll renews an existing certificate.
-func (c *Client) Reenroll(ctx context.Context, r *x509.CertificateRequest) (*x509.Certificate, error) {
-	return c.enrollCommon(ctx, r, true)
+func (c *Client) Reenroll(ctx context.Context, csr []byte) (*x509.Certificate, error) {
+	return c.enrollCommon(ctx, csr, true)
 }
 
 // Enroll requests a new certificate.
-func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, renew bool) (*x509.Certificate, error) {
-	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
+func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x509.Certificate, error) {
+	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
 
 	var endpoint = enrollEndpoint
 	if renew {
@@ -238,8 +238,8 @@ func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, r
 }
 
 // ServerKeyGen requests a new certificate and a server-generated private key.
-func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (*x509.Certificate, []byte, error) {
-	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
+func (c *Client) ServerKeyGen(ctx context.Context, csr []byte) (*x509.Certificate, []byte, error) {
+	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
 
 	req, err := c.newRequest(ctx, http.MethodPost, serverkeygenEndpoint,
 		mimeTypePKCS10, encodingTypeBase64, mimeTypeMultipart, reqBody)

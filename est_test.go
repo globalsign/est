@@ -227,7 +227,7 @@ func TestEnroll(t *testing.T) {
 			client.AdditionalPathSegment = tc.aps
 			csr := mustCreateCertificateRequest(t, tc.key, tc.commonName, nil)
 
-			cert, err := client.Enroll(ctx, csr)
+			cert, err := client.Enroll(ctx, csr.Raw)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -397,7 +397,7 @@ func TestReenroll(t *testing.T) {
 			client.AdditionalPathSegment = tc.aps
 			csr := mustCreateCertificateRequest(t, tc.key, tc.ecsr.Subject.CommonName, tc.ecsr.DNSNames)
 
-			got, err := client.Enroll(ctx, csr)
+			got, err := client.Enroll(ctx, csr.Raw)
 			if err != nil {
 				t.Fatalf("failed to enroll: %v", err)
 			}
@@ -410,7 +410,7 @@ func TestReenroll(t *testing.T) {
 			}
 			csr = mustCreateCertificateRequest(t, tc.key, tc.rcsr.Subject.CommonName, tc.rcsr.DNSNames)
 
-			_, err = client.Reenroll(ctx, csr)
+			_, err = client.Reenroll(ctx, csr.Raw)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -491,7 +491,7 @@ func TestServerKeyGen(t *testing.T) {
 				}
 			}
 
-			cert, key, err := client.ServerKeyGen(ctx, csr)
+			cert, key, err := client.ServerKeyGen(ctx, csr.Raw)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -601,7 +601,7 @@ func TestTPMEnroll(t *testing.T) {
 			// Request an EK certificate via normal enrollment.
 			ek := mustGenerateRSAPrivateKey(t)
 			csr := mustCreateCertificateRequest(t, ek, "Test TPM Device", nil)
-			ekcert, err := client.Enroll(ctx, csr)
+			ekcert, err := client.Enroll(ctx, csr.Raw)
 			if err != nil {
 				t.Fatalf("failed to enroll for EK certificate: %v", err)
 			}
