@@ -103,7 +103,7 @@ type Client struct {
 	// TLS-unique channel binding value is computed during the TLS handshake.
 	// RFC 7030 - section 3.5 recommends including it in the CSR.
 	//
-	// This field gets populated during CACert() operation.
+	// This field gets populated during CSRAttrs() operation.
 	//
 	// And because a new TLS connection results in a new TLS-unique value,
 	// make sure the same http client is used when (re)enrolling certificates as in CACerts().
@@ -140,8 +140,6 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 	if err := verifyResponseType(resp, mimeTypePKCS7, encodingTypeBase64); err != nil {
 		return nil, err
 	}
-
-	c.tlsUnique = resp.TLS.TLSUnique
 
 	return readCertsResponse(resp.Body)
 }
@@ -186,11 +184,15 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 
 	attributes, err := readCSRAttrsResponse(resp.Body)
 
-	clear(c.tlsUnique)
+	challengeRequired := false
 	for _, oid := range attributes.OIDs {
 		if oid.Equal(oidChallengePassword) {
 			c.tlsUnique = resp.TLS.TLSUnique
+			challengeRequired = true
 		}
+	}
+	if !challengeRequired {
+		c.tlsUnique = nil
 	}
 
 	return attributes, err
@@ -210,13 +212,15 @@ func (c *Client) Reenroll(ctx context.Context, csr []byte) (*x509.Certificate, e
 func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x509.Certificate, error) {
 	var reqBody io.ReadCloser
 	var endpoint = enrollEndpoint
+
 	if renew {
 		endpoint = reenrollEndpoint
 		c.makeHTTPClient()
 	}
+
 	// Re-evaluate the TLS-unique value
 	c.CSRAttrs(ctx)
-	if len(c.tlsUnique) != 0 {
+	if c.tlsUnique != nil {
 		standardLibCsr, _ := x509.ParseCertificateRequest(csr)
 		cr := CertificateRequest{
 			CertificateRequest: *standardLibCsr,
