@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -40,16 +42,46 @@ func TestCreateCertificateRequest(t *testing.T) {
 		ChallengePassword: string(tlsUnique64),
 	}
 
-	// act
-	csrBs, err := CreateCertificateRequest(rand.Reader, req, priv)
+	tests := map[string]struct {
+		reader  io.Reader
+		csr     *CertificateRequest
+		key     any
+		passing bool
+	}{
+		"NOK nil csr":   {reader: rand.Reader, csr: nil, key: priv, passing: false},
+		"NOK nil key":   {reader: rand.Reader, csr: req, key: nil, passing: false},
+		"OK ":           {reader: rand.Reader, csr: req, key: priv, passing: true},
+		"OK nil reader": {reader: nil, csr: req, key: priv, passing: true},
+	}
 
-	os.WriteFile(csrFilePath, csrBs, os.ModePerm)
+	for name, ctx := range tests {
+		t.Run(name, func(t *testing.T) {
+			// act
+			csrBs, err := CreateCertificateRequest(ctx.reader, ctx.csr, ctx.key)
 
-	// assert
-	if err == nil && csrBs != nil {
-		if _, err := os.Stat(csrFilePath); err != nil {
-			t.Error(err)
-		}
+			if err != nil && ctx.passing {
+				t.Error("Expected to pass but got an error: ", err)
+			}
+			if err == nil && !ctx.passing {
+				t.Error("Expected to fail but did not get any error")
+			}
+
+			// assert
+			if err == nil && csrBs != nil {
+				os.WriteFile(csrFilePath, csrBs, os.ModePerm)
+				if _, err := os.Stat(csrFilePath); err != nil {
+					t.Error(err)
+				}
+
+				cp, err := ParseChallengePassword(csrBs)
+				if err != nil {
+					t.Error(err)
+				}
+				if !strings.EqualFold(cp, string(tlsUnique64)) {
+					t.Errorf("Expected %s, but got %s instead", string(tlsUnique64), cp)
+				}
+			}
+		})
 	}
 }
 

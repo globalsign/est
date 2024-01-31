@@ -51,12 +51,17 @@ type CertificateRequest struct {
 //
 // See https://github.com/golang/go/issues/15995
 //
-// Current code comes from https://github.com/micromdm/scep/blob/main/cryptoutil/x509util/x509util.go#L58
-func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv interface{}) (csr []byte, err error) {
+// Copied from https://github.com/micromdm/scep/blob/main/cryptoutil/x509util/x509util.go#L58
+func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv any) (csr []byte, err error) {
+	if template == nil {
+		return nil, errors.New("make sure to rovide a certificate request template")
+	}
+
 	if template.ChallengePassword == "" {
 		// if no challenge password, return a stdlib CSR.
 		return x509.CreateCertificateRequest(rand, &template.CertificateRequest, priv)
 	}
+
 	csrBs, err := x509.CreateCertificateRequest(rand, &template.CertificateRequest, priv)
 	if err != nil {
 		return nil, err
@@ -69,6 +74,42 @@ func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv
 		template.ChallengePassword,
 		priv.(crypto.Signer),
 	)
+}
+
+// ParseChallengePassword extracts the challengePassword attribute from a
+// DER encoded Certificate Signing Request.
+//
+// Copied from https://github.com/micromdm/scep/blob/main/cryptoutil/x509util/x509util.go#L108
+func ParseChallengePassword(csr []byte) (string, error) {
+	type attribute struct {
+		ID    asn1.ObjectIdentifier
+		Value asn1.RawValue `asn1:"set"`
+	}
+	var cr certificateRequest
+	rest, err := asn1.Unmarshal(csr, &cr)
+	if err != nil {
+		return "", err
+	} else if len(rest) != 0 {
+		err = asn1.SyntaxError{Msg: "trailing data"}
+		return "", err
+	}
+
+	var password string
+	for _, rawAttr := range cr.TBSCSR.RawAttributes {
+		var attr attribute
+		_, err := asn1.Unmarshal(rawAttr.FullBytes, &attr)
+		if err != nil {
+			return "", err
+		}
+		if attr.ID.Equal(oidChallengePassword) {
+			_, err := asn1.Unmarshal(attr.Value.Bytes, &password)
+			if err != nil {
+				return "", err
+			}
+		}
+	}
+
+	return password, nil
 }
 
 // add the challenge attribute to the CSR, then re-sign the raw csr.
