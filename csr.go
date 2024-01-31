@@ -42,7 +42,6 @@ type certificateRequest struct {
 
 type CertificateRequest struct {
 	x509.CertificateRequest
-
 	ChallengePassword string
 }
 

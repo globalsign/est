@@ -18,6 +18,7 @@ package est
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -183,7 +184,16 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		return CSRAttrs{}, err
 	}
 
-	return readCSRAttrsResponse(resp.Body)
+	attributes, err := readCSRAttrsResponse(resp.Body)
+
+	clear(c.tlsUnique)
+	for _, oid := range attributes.OIDs {
+		if oid.Equal(oidChallengePassword) {
+			c.tlsUnique = resp.TLS.TLSUnique
+		}
+	}
+
+	return attributes, err
 }
 
 // Enroll requests a new certificate.
@@ -198,26 +208,32 @@ func (c *Client) Reenroll(ctx context.Context, csr []byte) (*x509.Certificate, e
 
 // Enroll requests a new certificate.
 func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x509.Certificate, error) {
-	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
-
+	var reqBody io.ReadCloser
 	var endpoint = enrollEndpoint
 	if renew {
 		endpoint = reenrollEndpoint
 		c.makeHTTPClient()
 	}
-
-	// todo:
-	// 1.	csrattrs => if popEnforced => include it
-	// 2.	then recreate the CSR : original + challenge password (both enroll or reenroll)
-	// todo: write method that takes the csr content and append the challenge password before signing the whole thing
+	// Re-evaluate the TLS-unique value
+	c.CSRAttrs(ctx)
+	if len(c.tlsUnique) != 0 {
+		standardLibCsr, _ := x509.ParseCertificateRequest(csr)
+		cr := CertificateRequest{
+			CertificateRequest: *standardLibCsr,
+			ChallengePassword:  string(base64Encode(c.tlsUnique)),
+		}
+		crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		reqBody = io.NopCloser(bytes.NewBuffer(base64Encode(crBs)))
+	} else {
+		reqBody = io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
+	}
 
 	req, err := c.newRequest(ctx, http.MethodPost, endpoint, mimeTypePKCS10, encodingTypeBase64, mimeTypePKCS7, reqBody)
 	if err != nil {
 		return nil, err
-	}
-
-	if c.httpc == nil {
-		c.makeHTTPClient()
 	}
 
 	resp, err := c.httpc.Do(req)
