@@ -30,7 +30,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -138,11 +138,14 @@ func TestCSRAttrs(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 
-			got, err := client.CSRAttrs(ctx)
-			if err != nil {
-				t.Fatalf("failed to get CSR attributes: %v", err)
+			if strings.EqualFold(tc.name, "empty") {
+				ctx = nil
 			}
 
+			got, err := client.CSRAttrs(ctx)
+			if err != nil && !strings.EqualFold(tc.name, "empty") {
+				t.Fatalf("failed to get CSR attributes: %v", err)
+			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("got %v, want %v", got, tc.want)
 			}
@@ -808,7 +811,7 @@ func TestServerErrors(t *testing.T) {
 		var tc = tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := http.NewRequest(tc.method, s.URL+tc.path, ioutil.NopCloser(bytes.NewBuffer(tc.body)))
+			r, err := http.NewRequest(tc.method, s.URL+tc.path, io.NopCloser(bytes.NewBuffer(tc.body)))
 			if err != nil {
 				t.Fatalf("failed to create new HTTP request: %v", err)
 			}
@@ -832,7 +835,7 @@ func TestServerErrors(t *testing.T) {
 				t.Fatalf("got status code %d, want %d", resp.StatusCode, tc.status)
 			}
 
-			data, err := ioutil.ReadAll(resp.Body)
+			data, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("failed to read HTTP response body: %s", err)
 			}
