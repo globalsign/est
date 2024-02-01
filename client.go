@@ -198,17 +198,16 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 	return attributes, err
 }
 
-// Enroll requests a new certificate.
+// Enroll requests a new certificate based on the csr der-encoded.
 func (c *Client) Enroll(ctx context.Context, csr []byte) (*x509.Certificate, error) {
 	return c.enrollCommon(ctx, csr, false)
 }
 
-// Reenroll renews an existing certificate.
+// Reenroll renews an existing certificate based on the csr der-encoded.
 func (c *Client) Reenroll(ctx context.Context, csr []byte) (*x509.Certificate, error) {
 	return c.enrollCommon(ctx, csr, true)
 }
 
-// Enroll requests a new certificate.
 func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x509.Certificate, error) {
 	var reqBody io.ReadCloser
 	var endpoint = enrollEndpoint
@@ -257,7 +256,7 @@ func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x50
 	return readCertResponse(resp.Body)
 }
 
-// ServerKeyGen requests a new certificate and a server-generated private key.
+// ServerKeyGen requests a new certificate and a server-generated private key based on the csr der-encoded.
 func (c *Client) ServerKeyGen(ctx context.Context, csr []byte) (*x509.Certificate, []byte, error) {
 	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
 
