@@ -220,12 +220,7 @@ func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x50
 	// Re-evaluate the TLS-unique value
 	c.CSRAttrs(ctx)
 	if c.tlsUnique != nil {
-		standardLibCsr, _ := x509.ParseCertificateRequest(csr)
-		cr := CertificateRequest{
-			CertificateRequest: *standardLibCsr,
-			ChallengePassword:  string(base64Encode(c.tlsUnique)),
-		}
-		crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.PrivateKey)
+		crBs, err := c.addTlsUnique(csr)
 		if err != nil {
 			return nil, err
 		}
@@ -254,6 +249,17 @@ func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x50
 	}
 
 	return readCertResponse(resp.Body)
+}
+
+// Creates and returns a new CSR where the challenge password attribute contains the Tls-unique value.
+func (c *Client) addTlsUnique(csr []byte) ([]byte, error) {
+	standardLibCsr, _ := x509.ParseCertificateRequest(csr)
+	cr := CertificateRequest{
+		CertificateRequest: *standardLibCsr,
+		ChallengePassword:  string(base64Encode(c.tlsUnique)),
+	}
+	crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.PrivateKey)
+	return crBs, err
 }
 
 // ServerKeyGen requests a new certificate and a server-generated private key based on the csr der-encoded.
