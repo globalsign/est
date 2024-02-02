@@ -122,7 +122,6 @@ func addChallenge(
 	key crypto.Signer,
 ) (csr []byte, err error) {
 
-	oidChallengePassword := oidChallengePassword
 	var hashFunc crypto.Hash
 	var sigAlgo pkix.AlgorithmIdentifier
 

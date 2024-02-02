@@ -24,20 +24,9 @@ func TestCreateCertificateRequest(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = x509.CreateCertificateRequest(
-		rand.Reader,
-		&x509.CertificateRequest{
-			Subject: pkix.Name{CommonName: subjectCN},
-		},
-		priv)
-
-	if err != nil {
-		t.Error(err)
-	}
-
 	req := &CertificateRequest{
 		CertificateRequest: x509.CertificateRequest{
-			Subject: pkix.Name{CommonName: "cn-field"},
+			Subject: pkix.Name{CommonName: subjectCN},
 		},
 		ChallengePassword: string(tlsUnique64),
 	}
