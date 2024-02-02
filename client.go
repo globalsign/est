@@ -103,10 +103,7 @@ type Client struct {
 	// TLS-unique channel binding value is computed during the TLS handshake.
 	// RFC 7030 - section 3.5 recommends including it in the CSR.
 	//
-	// This field gets populated during CSRAttrs() operation.
-	//
-	// And because a new TLS connection results in a new TLS-unique value,
-	// make sure the same http client is used when (re)enrolling certificates as in CACerts().
+	// The value could be nil with respect to TLS version. More details at https://pkg.go.dev/crypto/tls#ConnectionState.TLSUnique
 	tlsUnique []byte
 }
 

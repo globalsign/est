@@ -17,12 +17,13 @@ func main() {
 	// ------ Setup ------
 
 	// To make the sample work, we need to have
-	// 		- CA root and intermediate certificates in the resources folder (must be replaced with your certificates)
+	// 		- CA root and intermediate DER encoded certificates of the chosen EST server (update the "resources" folder)
 	//				Adapt sample according to what is available (cf. est.Client.ExplicitAnchor)
+	//				EST server certificates can be omitted and unsecure connection can be established, cf.est.Client.InsecureSkipVerify
 	// 		- EST server host (cf. est.Client instantiation)
 	// 		- EST http basic creds if necessary (cf. est.Client instantiation)
 
-	// The sample comes with a hard-coded private key that would sign the CSR => must be updated if we want to use a different key
+	// The sample comes with a hard-coded private key that would sign the CSR => must be updated if we want to use a different key, cf.est.Client.PrivateKey
 
 	rootCaCertPath := "../resources/rootca.der"
 	intermediateCACertpath := "../resources/intermediateca.der"
@@ -34,8 +35,16 @@ func main() {
 	priv, _ := getPrivateKey()
 
 	// -------- Applying the setup ---------
-	rootDERbs, _ := os.ReadFile(rootCaCertPath)
-	intermediateDERbs, _ := os.ReadFile(intermediateCACertpath)
+	rootDERbs, err := os.ReadFile(rootCaCertPath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	intermediateDERbs, err := os.ReadFile(intermediateCACertpath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 	rootCertificate, err := x509.ParseCertificate(rootDERbs)
 	if err != nil {
