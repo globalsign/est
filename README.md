@@ -121,5 +121,6 @@ alternative name extension from the certificate we're renewing.
 Basic and common operations are available in the samples directory.
 
 The EST client is expecting `root`and `intermediate` certificates of an EST server.  
-Because it can also be configured in a way to establish an unsecure communication, those certificates could be omitted (for testing purposes only).
+Because it can also be configured in a way to establish an unsecure communication, those certificates could be omitted (for testing purposes only).  
+
 In any case, sample can be changed to meet user requirements : Include CA certificates, change user credentials, enroll a different CSR etc.
