@@ -115,3 +115,12 @@ use that chain to reenroll:
 Note that when we omit the `-csr` option when reenrolling, the EST client
 automatically generates a CSR for us by copying the subject field and subject
 alternative name extension from the certificate we're renewing.
+
+### EST client samples
+
+Basic and common operations are available in the samples directory.
+
+The EST client is expecting `root`and `intermediate` certificates of an EST server.  
+Because it can also be configured in a way to establish an unsecure communication, those certificates could be omitted (for testing purposes only).  
+
+In any case, sample can be changed to meet user requirements : Include CA certificates, change user credentials, enroll a different CSR etc.

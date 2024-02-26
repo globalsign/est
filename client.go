@@ -18,12 +18,12 @@ package est
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -103,10 +103,7 @@ type Client struct {
 	// TLS-unique channel binding value is computed during the TLS handshake.
 	// RFC 7030 - section 3.5 recommends including it in the CSR.
 	//
-	// This field gets populated during CACert() operation.
-	//
-	// And because a new TLS connection results in a new TLS-unique value,
-	// make sure the same http client is used when (re)enrolling certificates as in CACerts().
+	// The value could be nil with respect to TLS version. More details at https://pkg.go.dev/crypto/tls#ConnectionState.TLSUnique
 	tlsUnique []byte
 }
 
@@ -140,8 +137,6 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 	if err := verifyResponseType(resp, mimeTypePKCS7, encodingTypeBase64); err != nil {
 		return nil, err
 	}
-
-	c.tlsUnique = resp.TLS.TLSUnique
 
 	return readCertsResponse(resp.Body)
 }
@@ -184,41 +179,56 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		return CSRAttrs{}, err
 	}
 
-	return readCSRAttrsResponse(resp.Body)
+	attributes, err := readCSRAttrsResponse(resp.Body)
+
+	challengeRequired := false
+	for _, oid := range attributes.OIDs {
+		if oid.Equal(oidChallengePassword) {
+			c.tlsUnique = resp.TLS.TLSUnique
+			challengeRequired = true
+		}
+	}
+	if !challengeRequired {
+		c.tlsUnique = nil
+	}
+
+	return attributes, err
 }
 
-// Enroll requests a new certificate.
-func (c *Client) Enroll(ctx context.Context, r *x509.CertificateRequest) (*x509.Certificate, error) {
-	return c.enrollCommon(ctx, r, false)
+// Enroll requests a new certificate based on the csr der-encoded.
+func (c *Client) Enroll(ctx context.Context, csr []byte) (*x509.Certificate, error) {
+	return c.enrollCommon(ctx, csr, false)
 }
 
-// Reenroll renews an existing certificate.
-func (c *Client) Reenroll(ctx context.Context, r *x509.CertificateRequest) (*x509.Certificate, error) {
-	return c.enrollCommon(ctx, r, true)
+// Reenroll renews an existing certificate based on the csr der-encoded.
+func (c *Client) Reenroll(ctx context.Context, csr []byte) (*x509.Certificate, error) {
+	return c.enrollCommon(ctx, csr, true)
 }
 
-// Enroll requests a new certificate.
-func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, renew bool) (*x509.Certificate, error) {
-	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
-
+func (c *Client) enrollCommon(ctx context.Context, csr []byte, renew bool) (*x509.Certificate, error) {
+	var reqBody io.ReadCloser
 	var endpoint = enrollEndpoint
+
 	if renew {
 		endpoint = reenrollEndpoint
 		c.makeHTTPClient()
 	}
 
-	// todo:
-	// 1.	csrattrs => if popEnforced => include it
-	// 2.	then recreate the CSR : original + challenge password (both enroll or reenroll)
-	// todo: write method that takes the csr content and append the challenge password before signing the whole thing
+	// Re-evaluate the TLS-unique value
+	c.CSRAttrs(ctx)
+	if c.tlsUnique != nil {
+		crBs, err := c.addTlsUnique(csr)
+		if err != nil {
+			return nil, err
+		}
+		reqBody = io.NopCloser(bytes.NewBuffer(base64Encode(crBs)))
+	} else {
+		reqBody = io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
+	}
 
 	req, err := c.newRequest(ctx, http.MethodPost, endpoint, mimeTypePKCS10, encodingTypeBase64, mimeTypePKCS7, reqBody)
 	if err != nil {
 		return nil, err
-	}
-
-	if c.httpc == nil {
-		c.makeHTTPClient()
 	}
 
 	resp, err := c.httpc.Do(req)
@@ -238,9 +248,20 @@ func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, r
 	return readCertResponse(resp.Body)
 }
 
-// ServerKeyGen requests a new certificate and a server-generated private key.
-func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (*x509.Certificate, []byte, error) {
-	reqBody := ioutil.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
+// Creates and returns a new CSR where the challenge password attribute contains the Tls-unique value.
+func (c *Client) addTlsUnique(csr []byte) ([]byte, error) {
+	standardLibCsr, _ := x509.ParseCertificateRequest(csr)
+	cr := CertificateRequest{
+		CertificateRequest: *standardLibCsr,
+		ChallengePassword:  string(base64Encode(c.tlsUnique)),
+	}
+	crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.PrivateKey)
+	return crBs, err
+}
+
+// ServerKeyGen requests a new certificate and a server-generated private key based on the csr der-encoded.
+func (c *Client) ServerKeyGen(ctx context.Context, csr []byte) (*x509.Certificate, []byte, error) {
+	reqBody := io.NopCloser(bytes.NewBuffer(base64Encode(csr)))
 
 	req, err := c.newRequest(ctx, http.MethodPost, serverkeygenEndpoint,
 		mimeTypePKCS10, encodingTypeBase64, mimeTypeMultipart, reqBody)
@@ -378,7 +399,7 @@ func (c *Client) TPMEnroll(
 		return nil, nil, nil, err
 	}
 
-	reqBody := ioutil.NopCloser(buf)
+	reqBody := io.NopCloser(buf)
 
 	req, err := c.newRequest(ctx, http.MethodPost, tpmenrollEndpoint,
 		contentType, "", mimeTypeMultipart, reqBody)
@@ -520,7 +541,7 @@ func checkResponseError(r *http.Response) error {
 	if err == nil || r.Header.Get(contentTypeHeader) == "" {
 		switch mediaType {
 		case "", mimeTypeTextPlain, mimeTypeJSON, mimeTypeProblemJSON:
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			if err != nil {
 				return err
 			}

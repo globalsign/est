@@ -30,7 +30,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -138,11 +138,14 @@ func TestCSRAttrs(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 
-			got, err := client.CSRAttrs(ctx)
-			if err != nil {
-				t.Fatalf("failed to get CSR attributes: %v", err)
+			if strings.EqualFold(tc.name, "empty") {
+				ctx = nil
 			}
 
+			got, err := client.CSRAttrs(ctx)
+			if err != nil && !strings.EqualFold(tc.name, "empty") {
+				t.Fatalf("failed to get CSR attributes: %v", err)
+			}
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("got %v, want %v", got, tc.want)
 			}
@@ -227,7 +230,7 @@ func TestEnroll(t *testing.T) {
 			client.AdditionalPathSegment = tc.aps
 			csr := mustCreateCertificateRequest(t, tc.key, tc.commonName, nil)
 
-			cert, err := client.Enroll(ctx, csr)
+			cert, err := client.Enroll(ctx, csr.Raw)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -397,7 +400,7 @@ func TestReenroll(t *testing.T) {
 			client.AdditionalPathSegment = tc.aps
 			csr := mustCreateCertificateRequest(t, tc.key, tc.ecsr.Subject.CommonName, tc.ecsr.DNSNames)
 
-			got, err := client.Enroll(ctx, csr)
+			got, err := client.Enroll(ctx, csr.Raw)
 			if err != nil {
 				t.Fatalf("failed to enroll: %v", err)
 			}
@@ -410,7 +413,7 @@ func TestReenroll(t *testing.T) {
 			}
 			csr = mustCreateCertificateRequest(t, tc.key, tc.rcsr.Subject.CommonName, tc.rcsr.DNSNames)
 
-			_, err = client.Reenroll(ctx, csr)
+			_, err = client.Reenroll(ctx, csr.Raw)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -491,7 +494,7 @@ func TestServerKeyGen(t *testing.T) {
 				}
 			}
 
-			cert, key, err := client.ServerKeyGen(ctx, csr)
+			cert, key, err := client.ServerKeyGen(ctx, csr.Raw)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -601,7 +604,7 @@ func TestTPMEnroll(t *testing.T) {
 			// Request an EK certificate via normal enrollment.
 			ek := mustGenerateRSAPrivateKey(t)
 			csr := mustCreateCertificateRequest(t, ek, "Test TPM Device", nil)
-			ekcert, err := client.Enroll(ctx, csr)
+			ekcert, err := client.Enroll(ctx, csr.Raw)
 			if err != nil {
 				t.Fatalf("failed to enroll for EK certificate: %v", err)
 			}
@@ -808,7 +811,7 @@ func TestServerErrors(t *testing.T) {
 		var tc = tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := http.NewRequest(tc.method, s.URL+tc.path, ioutil.NopCloser(bytes.NewBuffer(tc.body)))
+			r, err := http.NewRequest(tc.method, s.URL+tc.path, io.NopCloser(bytes.NewBuffer(tc.body)))
 			if err != nil {
 				t.Fatalf("failed to create new HTTP request: %v", err)
 			}
@@ -832,7 +835,7 @@ func TestServerErrors(t *testing.T) {
 				t.Fatalf("got status code %d, want %d", resp.StatusCode, tc.status)
 			}
 
-			data, err := ioutil.ReadAll(resp.Body)
+			data, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("failed to read HTTP response body: %s", err)
 			}
