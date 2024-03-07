@@ -285,13 +285,6 @@ func verifyRequestType(have, want string) error {
 	return nil
 }
 
-// verifyRequestEncoding verifies if the content-transfer-encoding of an HTTP
-// request is as expected. It returns an error implementing Error and is
-// intended to be used by server code.
-func verifyRequestEncoding(have, want string) error {
-	return nil
-}
-
 // writeResponse writes headers, a status code, and an object containing the
 // body to an HTTP response. If encode is true, the object is base64-encoded.
 // The appropriate encoding is chosen according to the object's type.
