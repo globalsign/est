@@ -303,7 +303,7 @@ func TestCACerts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := bytes.NewBuffer([]byte{})
 			err := cacerts(buf, makeCmdFlagSet(t, cacertsCmd, tc.args))
-			VerifyErrorTextContainsOneOf(t, err, tc.err)
+			verifyErrorTextContainsOneOf(t, err, tc.err)
 			if tc.err != nil {
 				return
 			}
@@ -326,14 +326,18 @@ func TestCSRAttrs(t *testing.T) {
 		name   string
 		args   []string
 		length int
-		err    error
+		err    []error
 	}{
 		{
 			name: "NoAnchor",
 			args: []string{
 				"-" + serverFlag, uri,
 			},
-			err: errors.New("certificate signed by unknown authority"),
+			err: []error{
+				errors.New("failed to verify certificate"),
+				errors.New("certificate is not trusted"),
+				errors.New("certificate signed by unknown authority"),
+			},
 		},
 		{
 			name: "Insecure",
@@ -368,7 +372,9 @@ func TestCSRAttrs(t *testing.T) {
 				"-" + apsFlag, "triggererrors",
 				"-" + explicitAnchorFlag, cafile,
 			},
-			err: errors.New("internal server error"),
+			err: []error{
+				errors.New("internal server error"),
+			},
 		},
 	}
 
@@ -378,7 +384,7 @@ func TestCSRAttrs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := bytes.NewBuffer([]byte{})
 			err := csrattrs(buf, makeCmdFlagSet(t, csrattrsCmd, tc.args))
-			verifyErrorTextContains(t, err, tc.err)
+			verifyErrorTextContainsOneOf(t, err, tc.err)
 
 			if tc.err != nil {
 				return
@@ -955,10 +961,10 @@ func verifyErrorTextContains(t *testing.T, got, want error) {
 	}
 }
 
-// VerifyErrorTextContainsOneOf tests if the error text contains one of the strings.
+// verifyErrorTextContainsOneOf tests if the error text contains one of the strings.
 // This is useful for testing errors that output different text on different
 // platforms or between versions.
-func VerifyErrorTextContainsOneOf(t *testing.T, got error, wants []error) {
+func verifyErrorTextContainsOneOf(t *testing.T, got error, wants []error) {
 	t.Helper()
 
 	if got == nil && len(wants) == 0 {
