@@ -971,20 +971,21 @@ func verifyErrorTextContainsOneOf(t *testing.T, got error, wants []error) {
 		return
 	}
 
-	if got != nil && len(wants) == 0 {
-		t.Fatalf("got %v, want no error", got)
-	}
-
 	if got == nil && len(wants) > 0 {
 		t.Fatalf("got nil, want one of %v", wants)
 	}
 
+	if got != nil && len(wants) == 0 {
+		t.Fatalf("got %v, want no error", got)
+	}
+
+	// got != nil && len(wants) > 0
+
 	contains := false
 	for _, w := range wants {
-		if got != nil && !strings.Contains(got.Error(), w.Error()) {
-			break
+		if strings.Contains(got.Error(), w.Error()) {
+			contains = true
 		}
-		contains = true
 	}
 
 	if !contains {
