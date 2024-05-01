@@ -171,15 +171,11 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 		r.With(
 			requireContentType(mimeTypePKCS10),
 		).With(
-			requireTransferEncoding(encodingTypeBase64),
-		).With(
 			requireBasicAuth(cfg.CheckBasicAuth, true),
 		).Post(enrollEndpoint, enroll)
 
 		r.With(
 			requireContentType(mimeTypePKCS10),
-		).With(
-			requireTransferEncoding(encodingTypeBase64),
 		).With(
 			requireBasicAuth(cfg.CheckBasicAuth, true),
 		).With(
@@ -188,8 +184,6 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 
 		r.With(
 			requireContentType(mimeTypePKCS10),
-		).With(
-			requireTransferEncoding(encodingTypeBase64),
 		).With(
 			requireBasicAuth(cfg.CheckBasicAuth, true),
 		).Post(serverkeygenEndpoint, serverkeygen)
@@ -208,15 +202,11 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 			r.With(
 				requireContentType(mimeTypePKCS10),
 			).With(
-				requireTransferEncoding(encodingTypeBase64),
-			).With(
 				requireBasicAuth(cfg.CheckBasicAuth, true),
 			).Post(enrollEndpoint, enroll)
 
 			r.With(
 				requireContentType(mimeTypePKCS10),
-			).With(
-				requireTransferEncoding(encodingTypeBase64),
 			).With(
 				requireBasicAuth(cfg.CheckBasicAuth, true),
 			).With(
@@ -225,8 +215,6 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 
 			r.With(
 				requireContentType(mimeTypePKCS10),
-			).With(
-				requireTransferEncoding(encodingTypeBase64),
 			).With(
 				requireBasicAuth(cfg.CheckBasicAuth, true),
 			).Post(serverkeygenEndpoint, serverkeygen)
@@ -608,20 +596,6 @@ func requireContentType(t string) func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := verifyRequestType(r.Header.Get(contentTypeHeader), t); err != nil {
 				writeOnError(r.Context(), w, logMsgContentTypeInvalid, err)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-// requireTransferEncoding is middleware which rejects a request if the content
-// transfer encoding is not as stated.
-func requireTransferEncoding(e string) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := verifyRequestEncoding(r.Header.Get(transferEncodingHeader), e); err != nil {
-				writeOnError(r.Context(), w, logMsgTransferEncodingInvalid, err)
 				return
 			}
 			next.ServeHTTP(w, r)

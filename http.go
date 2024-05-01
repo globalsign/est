@@ -245,17 +245,6 @@ func verifyResponseType(r *http.Response, t, e string) error {
 		return fmt.Errorf("unexpected %s: %s", contentTypeHeader, ctype)
 	}
 
-	cenc := r.Header.Get(transferEncodingHeader)
-	if cenc == "" {
-		return fmt.Errorf("missing %s header", transferEncodingHeader)
-	}
-
-	// Content-Transfer-Encoding values are not case sensitive per RFC 2045
-	// section 6.
-	if strings.ToUpper(cenc) != strings.ToUpper(e) {
-		return fmt.Errorf("unexpected %s: %s", transferEncodingHeader, cenc)
-	}
-
 	return nil
 }
 
@@ -270,17 +259,6 @@ func verifyPartTypeResponse(part *multipart.Part, t, e string) error {
 
 	if !strings.HasPrefix(ctype, t) {
 		return fmt.Errorf("unexpected %s: %s", contentTypeHeader, ctype)
-	}
-
-	cenc := part.Header.Get(transferEncodingHeader)
-	if cenc == "" {
-		return fmt.Errorf("missing %s header", transferEncodingHeader)
-	}
-
-	// Content-Transfer-Encoding values are not case sensitive per RFC 2045
-	// section 6.
-	if strings.ToUpper(cenc) != strings.ToUpper(e) {
-		return fmt.Errorf("unexpected %s: %s", transferEncodingHeader, cenc)
 	}
 
 	return nil
@@ -301,29 +279,6 @@ func verifyRequestType(have, want string) error {
 		return &estError{
 			status: http.StatusUnsupportedMediaType,
 			desc:   fmt.Sprintf("%s must be %s", contentTypeHeader, want),
-		}
-	}
-
-	return nil
-}
-
-// verifyRequestEncoding verifies if the content-transfer-encoding of an HTTP
-// request is as expected. It returns an error implementing Error and is
-// intended to be used by server code.
-func verifyRequestEncoding(have, want string) error {
-	if have == "" {
-		return &estError{
-			status: http.StatusUnsupportedMediaType,
-			desc:   fmt.Sprintf("missing %s header", transferEncodingHeader),
-		}
-	}
-
-	// Content-Transfer-Encoding values are not case sensitive per RFC 2045
-	// section 6.
-	if strings.ToUpper(have) != strings.ToUpper(want) {
-		return &estError{
-			status: http.StatusUnsupportedMediaType,
-			desc:   fmt.Sprintf("%s must be %s", transferEncodingHeader, want),
 		}
 	}
 

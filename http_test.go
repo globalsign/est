@@ -67,29 +67,6 @@ func TestVerifyResponseType(t *testing.T) {
 			err: errors.New("missing or malformed Content-Type header: mime: no media type"),
 		},
 		{
-			name: "WrongEncoding",
-			r: &http.Response{
-				Header: http.Header{
-					"Content-Type":              []string{"application/pkcs7; smime-type=certs-only"},
-					"Content-Transfer-Encoding": []string{"base64"},
-				},
-			},
-			t:   "application/pkcs7",
-			e:   "binary",
-			err: errors.New("unexpected Content-Transfer-Encoding: base64"),
-		},
-		{
-			name: "MissingEncoding",
-			r: &http.Response{
-				Header: http.Header{
-					"Content-Type": []string{"application/pkcs7; smime-type=certs-only"},
-				},
-			},
-			t:   "application/pkcs7",
-			e:   "base64",
-			err: errors.New("missing Content-Transfer-Encoding header"),
-		},
-		{
 			name: "BadTypeParameter",
 			r: &http.Response{
 				Header: http.Header{
