@@ -18,7 +18,6 @@ package est
 import (
 	"encoding/asn1"
 	"io"
-	"io/ioutil"
 )
 
 // URI constants.
@@ -75,6 +74,6 @@ var (
 // consumeAndClose discards any remaining data in the io.ReadCloser and then
 // closes it.
 func consumeAndClose(rc io.ReadCloser) {
-	io.Copy(ioutil.Discard, rc)
+	io.Copy(io.Discard, rc)
 	rc.Close()
 }
