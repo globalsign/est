@@ -256,14 +256,6 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 			return nil, nil, fmt.Errorf("more than %d parts in HTTP response", numParts)
 		}
 
-		// Check content-transfer-encoding is as expected, and read the part
-		// body.
-		if ce := part.Header.Get(transferEncodingHeader); ce == "" {
-			return nil, nil, fmt.Errorf("missing %s header", transferEncodingHeader)
-		} else if strings.ToUpper(ce) != strings.ToUpper(encodingTypeBase64) {
-			return nil, nil, fmt.Errorf("unexpected %s: %s", transferEncodingHeader, ce)
-		}
-
 		// Process based on the part's content-type. Per RFC7030 4.4.2, if
 		// additional encryption is not being employed, the private key data
 		// must be placed in an application/pkcs8 part. Otherwise, it must
