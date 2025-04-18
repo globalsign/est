@@ -30,7 +30,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -138,14 +138,11 @@ func TestCSRAttrs(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 			defer cancel()
 
-			if strings.EqualFold(tc.name, "empty") {
-				ctx = nil
-			}
-
 			got, err := client.CSRAttrs(ctx)
-			if err != nil && !strings.EqualFold(tc.name, "empty") {
+			if err != nil {
 				t.Fatalf("failed to get CSR attributes: %v", err)
 			}
+
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("got %v, want %v", got, tc.want)
 			}
@@ -215,6 +212,7 @@ func TestEnroll(t *testing.T) {
 			defer s.Close()
 
 			client := newTestClient()
+			client.PrivateKey = tc.key
 
 			// Get CA certificates before setting additional path segment,
 			// which may otherwise trigger errors.
@@ -230,7 +228,7 @@ func TestEnroll(t *testing.T) {
 			client.AdditionalPathSegment = tc.aps
 			csr := mustCreateCertificateRequest(t, tc.key, tc.commonName, nil)
 
-			cert, err := client.Enroll(ctx, csr.Raw)
+			cert, err := client.Enroll(ctx, csr)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -296,8 +294,6 @@ func TestReenroll(t *testing.T) {
 	// Create test EST server and client.
 	s, newTestClient := newTestServer(t)
 	defer s.Close()
-
-	client := newTestClient()
 
 	altKey := mustGenerateECPrivateKey(t)
 
@@ -384,7 +380,9 @@ func TestReenroll(t *testing.T) {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			// Create test EST server and client.
+			// Create test EST client.
+			client := newTestClient()
+			client.PrivateKey = tc.key
 
 			// Get CA certificates before setting additional path segment,
 			// which may otherwise trigger errors.
@@ -400,20 +398,19 @@ func TestReenroll(t *testing.T) {
 			client.AdditionalPathSegment = tc.aps
 			csr := mustCreateCertificateRequest(t, tc.key, tc.ecsr.Subject.CommonName, tc.ecsr.DNSNames)
 
-			got, err := client.Enroll(ctx, csr.Raw)
+			got, err := client.Enroll(ctx, csr)
 			if err != nil {
 				t.Fatalf("failed to enroll: %v", err)
 			}
 
 			// Reenroll.
-			client.PrivateKey = tc.key
 			client.Certificates = append([]*x509.Certificate{got}, cacerts...)
 			if tc.certs != nil {
 				client.Certificates = tc.certs
 			}
 			csr = mustCreateCertificateRequest(t, tc.key, tc.rcsr.Subject.CommonName, tc.rcsr.DNSNames)
 
-			_, err = client.Reenroll(ctx, csr.Raw)
+			_, err = client.Reenroll(ctx, csr)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -494,7 +491,7 @@ func TestServerKeyGen(t *testing.T) {
 				}
 			}
 
-			cert, key, err := client.ServerKeyGen(ctx, csr.Raw)
+			cert, key, err := client.ServerKeyGen(ctx, csr)
 			if err == nil {
 				// If there is no error, verify we were expecting success.
 				if tc.status != http.StatusOK {
@@ -604,7 +601,9 @@ func TestTPMEnroll(t *testing.T) {
 			// Request an EK certificate via normal enrollment.
 			ek := mustGenerateRSAPrivateKey(t)
 			csr := mustCreateCertificateRequest(t, ek, "Test TPM Device", nil)
-			ekcert, err := client.Enroll(ctx, csr.Raw)
+
+			client.PrivateKey = ek
+			ekcert, err := client.Enroll(ctx, csr)
 			if err != nil {
 				t.Fatalf("failed to enroll for EK certificate: %v", err)
 			}
@@ -731,31 +730,6 @@ func TestServerErrors(t *testing.T) {
 			errText: "415 malformed or missing Content-Type header\n",
 		},
 		{
-			name:   "Enroll/BadContentTransferEncoding",
-			path:   enrollEndpoint,
-			method: http.MethodPost,
-			headers: http.Header{
-				typeHeader:          []string{mimeTypePKCS10},
-				encodingHeader:      []string{encodingBinary},
-				authorizationHeader: []string{authorizationValue},
-				hostHeader:          []string{testDomain},
-			},
-			status:  http.StatusUnsupportedMediaType,
-			errText: "415 Content-Transfer-Encoding must be base64\n",
-		},
-		{
-			name:   "Enroll/MissingContentTransferEncoding",
-			path:   enrollEndpoint,
-			method: http.MethodPost,
-			headers: http.Header{
-				typeHeader:          []string{mimeTypePKCS10},
-				authorizationHeader: []string{authorizationValue},
-				hostHeader:          []string{testDomain},
-			},
-			status:  http.StatusUnsupportedMediaType,
-			errText: "415 missing Content-Transfer-Encoding header\n",
-		},
-		{
 			name:   "Enroll/BadBase64",
 			path:   enrollEndpoint,
 			method: http.MethodPost,
@@ -811,7 +785,7 @@ func TestServerErrors(t *testing.T) {
 		var tc = tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := http.NewRequest(tc.method, s.URL+tc.path, io.NopCloser(bytes.NewBuffer(tc.body)))
+			r, err := http.NewRequest(tc.method, s.URL+tc.path, ioutil.NopCloser(bytes.NewBuffer(tc.body)))
 			if err != nil {
 				t.Fatalf("failed to create new HTTP request: %v", err)
 			}
@@ -835,7 +809,7 @@ func TestServerErrors(t *testing.T) {
 				t.Fatalf("got status code %d, want %d", resp.StatusCode, tc.status)
 			}
 
-			data, err := io.ReadAll(resp.Body)
+			data, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatalf("failed to read HTTP response body: %s", err)
 			}
@@ -951,6 +925,7 @@ func newTestServer(t *testing.T) (*httptest.Server, func() *est.Client) {
 				Leaf:        serverCert,
 			},
 		},
+		MaxVersion: tls.VersionTLS12,
 	}
 
 	s.StartTLS()

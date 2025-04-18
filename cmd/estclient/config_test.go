@@ -416,6 +416,7 @@ func TestEnroll(t *testing.T) {
 			args: []string{
 				"-" + serverFlag, uri,
 				"-" + explicitAnchorFlag, cafile,
+				"-" + keyFlag, "testdata/test_key.pem",
 				"-" + csrFlag, "testdata/test_csr.pem",
 				"-" + usernameFlag, "testuser",
 				"-" + passwordFlag, "xyzzy",

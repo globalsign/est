@@ -252,7 +252,7 @@ func verifyResponseType(r *http.Response, t, e string) error {
 
 	// Content-Transfer-Encoding values are not case sensitive per RFC 2045
 	// section 6.
-	if !strings.EqualFold(cenc, e) {
+	if strings.ToUpper(cenc) != strings.ToUpper(e) {
 		return fmt.Errorf("unexpected %s: %s", transferEncodingHeader, cenc)
 	}
 
@@ -279,7 +279,7 @@ func verifyPartTypeResponse(part *multipart.Part, t, e string) error {
 
 	// Content-Transfer-Encoding values are not case sensitive per RFC 2045
 	// section 6.
-	if !strings.EqualFold(cenc, e) {
+	if strings.ToUpper(cenc) != strings.ToUpper(e) {
 		return fmt.Errorf("unexpected %s: %s", transferEncodingHeader, cenc)
 	}
 
@@ -320,7 +320,7 @@ func verifyRequestEncoding(have, want string) error {
 
 	// Content-Transfer-Encoding values are not case sensitive per RFC 2045
 	// section 6.
-	if !strings.EqualFold(have, want) {
+	if strings.ToUpper(have) != strings.ToUpper(want) {
 		return &estError{
 			status: http.StatusUnsupportedMediaType,
 			desc:   fmt.Sprintf("%s must be %s", transferEncodingHeader, want),
