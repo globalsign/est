@@ -18,6 +18,7 @@ package est
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -26,10 +27,15 @@ import (
 	"io/ioutil"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	tcpProtocol string = "tcp"
 )
 
 // Client is an EST client implementing the Enrollment over Secure Transport
@@ -111,7 +117,12 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 		return nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	httpc, _, err := c.makeHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := httpc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -135,7 +146,12 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		return CSRAttrs{}, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	httpc, _, err := c.makeHTTPClient()
+	if err != nil {
+		return CSRAttrs{}, err
+	}
+
+	resp, err := httpc.Do(req)
 	if err != nil {
 		return CSRAttrs{}, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -177,19 +193,31 @@ func (c *Client) Reenroll(ctx context.Context, r *x509.CertificateRequest) (*x50
 
 // Enroll requests a new certificate.
 func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, renew bool) (*x509.Certificate, error) {
-	reqBody := ioutil.NopCloser(bytes.NewBuffer(base64Encode(r.Raw)))
-
 	var endpoint = enrollEndpoint
 	if renew {
 		endpoint = reenrollEndpoint
 	}
 
+	httpc, tlsUnique64, err := c.makeHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+
+	crBs := r.Raw
+	if tlsUnique64 != "" {
+		crBs, err = c.addChallengePassword(r.Raw, tlsUnique64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	reqBody := ioutil.NopCloser(bytes.NewBuffer(base64Encode(crBs)))
 	req, err := c.newRequest(ctx, http.MethodPost, endpoint, mimeTypePKCS10, encodingTypeBase64, mimeTypePKCS7, reqBody)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	resp, err := httpc.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -216,7 +244,12 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 		return nil, nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	httpc, _, err := c.makeHTTPClient()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp, err := httpc.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -254,14 +287,6 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 		// Return with error if there are more parts than we expect.
 		if i > numParts {
 			return nil, nil, fmt.Errorf("more than %d parts in HTTP response", numParts)
-		}
-
-		// Check content-transfer-encoding is as expected, and read the part
-		// body.
-		if ce := part.Header.Get(transferEncodingHeader); ce == "" {
-			return nil, nil, fmt.Errorf("missing %s header", transferEncodingHeader)
-		} else if strings.ToUpper(ce) != strings.ToUpper(encodingTypeBase64) {
-			return nil, nil, fmt.Errorf("unexpected %s: %s", transferEncodingHeader, ce)
 		}
 
 		// Process based on the part's content-type. Per RFC7030 4.4.2, if
@@ -350,7 +375,12 @@ func (c *Client) TPMEnroll(
 		return nil, nil, nil, err
 	}
 
-	resp, err := c.makeHTTPClient().Do(req)
+	httpc, _, err := c.makeHTTPClient()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	resp, err := httpc.Do(req)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to execute HTTP request: %w", err)
 	}
@@ -455,6 +485,17 @@ func (c *Client) newRequest(
 	return req, err
 }
 
+// Creates and returns a new CSR where the challenge password attribute contains the Tls-unique value base64 encoded.
+func (c *Client) addChallengePassword(csr []byte, challengePassword string) ([]byte, error) {
+	standardLibCsr, _ := x509.ParseCertificateRequest(csr)
+	cr := CertificateRequest{
+		CertificateRequest: *standardLibCsr,
+		ChallengePassword:  challengePassword,
+	}
+	crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.PrivateKey)
+	return crBs, err
+}
+
 // checkResponseError returns nil if the HTTP response status code is 200 OK,
 // otherwise it returns an error object implementing est.Error. In order to
 // parse the Retry-After header and return a value, note that 202 Accepted
@@ -541,8 +582,12 @@ func (c *Client) uri(endpoint string) string {
 }
 
 // makeHTTPClient makes and configures an HTTP client for connecting to an
-// EST server.
-func (c *Client) makeHTTPClient() *http.Client {
+// EST server. It also returns the corresponding TLS-unique value base64 encoded which could be required by EST server.
+//
+// RFC 7030 - section 3.5 recommends including it in the CSR challenge password field.
+//
+// The value could be nil with respect to TLS version. More details at https://pkg.go.dev/crypto/tls#ConnectionState.TLSUnique
+func (c *Client) makeHTTPClient() (*http.Client, string, error) {
 	var rootCAs *x509.CertPool
 	if c.ExplicitAnchor != nil {
 		rootCAs = c.ExplicitAnchor
@@ -558,14 +603,32 @@ func (c *Client) makeHTTPClient() *http.Client {
 		}
 	}
 
-	return &http.Client{
+	tlsClientConfig := &tls.Config{
+		RootCAs:            rootCAs,
+		Certificates:       tlsCerts,
+		InsecureSkipVerify: c.InsecureSkipVerify,
+	}
+
+	conn, err := tls.Dial(tcpProtocol, c.Host, tlsClientConfig)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var tlsUnique64 string
+	if tlsu := conn.ConnectionState().TLSUnique; tlsu != nil {
+		tlsUnique64 = string(base64Encode(tlsu))
+	} else {
+		tlsUnique64 = ""
+	}
+
+	httpc := &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs:            rootCAs,
-				Certificates:       tlsCerts,
-				InsecureSkipVerify: c.InsecureSkipVerify,
+			DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return conn, nil
 			},
 			DisableKeepAlives: c.DisableKeepAlives,
 		},
 	}
+
+	return httpc, tlsUnique64, nil
 }

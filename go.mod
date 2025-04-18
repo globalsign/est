@@ -1,6 +1,6 @@
 module github.com/globalsign/est
 
-go 1.13
+go 1.22.1
 
 require (
 	github.com/ThalesIgnite/crypto11 v1.2.1
@@ -9,7 +9,14 @@ require (
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/google/go-tpm v0.3.2
 	go.mozilla.org/pkcs7 v0.0.0-20200128120323-432b2356ecb1
-	golang.org/x/crypto v0.0.0-20200602180216-279210d13fed
-	golang.org/x/sys v0.0.0-20210220050731-9a76102bfb43 // indirect
+	golang.org/x/crypto v0.31.0
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
+)
+
+require (
+	github.com/miekg/pkcs11 v1.0.3-0.20190429190417-a667d056470f // indirect
+	github.com/pkg/errors v0.8.1 // indirect
+	github.com/thales-e-security/pool v0.0.1 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
 )

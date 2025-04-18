@@ -27,7 +27,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"flag"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -250,14 +250,18 @@ func TestCACerts(t *testing.T) {
 	var testcases = []struct {
 		name string
 		args []string
-		err  error
+		err  []error
 	}{
 		{
 			name: "NoAnchor",
 			args: []string{
 				"-" + serverFlag, uri,
 			},
-			err: errors.New("certificate signed by unknown authority"),
+			err: []error{
+				errors.New("failed to verify certificate"),
+				errors.New("certificate is not trusted"),
+				errors.New("certificate signed by unknown authority"),
+			},
 		},
 		{
 			name: "Insecure",
@@ -289,7 +293,7 @@ func TestCACerts(t *testing.T) {
 				"-" + apsFlag, "triggererrors",
 				"-" + explicitAnchorFlag, cafile,
 			},
-			err: errors.New("internal server error"),
+			err: []error{errors.New("internal server error")},
 		},
 	}
 
@@ -299,7 +303,7 @@ func TestCACerts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := bytes.NewBuffer([]byte{})
 			err := cacerts(buf, makeCmdFlagSet(t, cacertsCmd, tc.args))
-			verifyErrorTextContains(t, err, tc.err)
+			verifyErrorTextContainsOneOf(t, err, tc.err)
 			if tc.err != nil {
 				return
 			}
@@ -322,14 +326,18 @@ func TestCSRAttrs(t *testing.T) {
 		name   string
 		args   []string
 		length int
-		err    error
+		err    []error
 	}{
 		{
 			name: "NoAnchor",
 			args: []string{
 				"-" + serverFlag, uri,
 			},
-			err: errors.New("certificate signed by unknown authority"),
+			err: []error{
+				errors.New("failed to verify certificate"),
+				errors.New("certificate is not trusted"),
+				errors.New("certificate signed by unknown authority"),
+			},
 		},
 		{
 			name: "Insecure",
@@ -364,7 +372,9 @@ func TestCSRAttrs(t *testing.T) {
 				"-" + apsFlag, "triggererrors",
 				"-" + explicitAnchorFlag, cafile,
 			},
-			err: errors.New("internal server error"),
+			err: []error{
+				errors.New("internal server error"),
+			},
 		},
 	}
 
@@ -374,7 +384,7 @@ func TestCSRAttrs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := bytes.NewBuffer([]byte{})
 			err := csrattrs(buf, makeCmdFlagSet(t, csrattrsCmd, tc.args))
-			verifyErrorTextContains(t, err, tc.err)
+			verifyErrorTextContainsOneOf(t, err, tc.err)
 
 			if tc.err != nil {
 				return
@@ -406,6 +416,7 @@ func TestEnroll(t *testing.T) {
 			args: []string{
 				"-" + serverFlag, uri,
 				"-" + explicitAnchorFlag, cafile,
+				"-" + keyFlag, "testdata/test_key.pem",
 				"-" + csrFlag, "testdata/test_csr.pem",
 				"-" + usernameFlag, "testuser",
 				"-" + passwordFlag, "xyzzy",
@@ -507,7 +518,7 @@ func TestReenroll(t *testing.T) {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			f, err := ioutil.TempFile("", "reenroll_test_")
+			f, err := os.CreateTemp("", "reenroll_test_")
 			if err != nil {
 				t.Fatalf("failed to create temporary file: %v", err)
 			}
@@ -809,9 +820,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *x509.Certificate, string) {
 	}
 
 	checkBasicAuth := func(
-		ctx context.Context,
-		r *http.Request,
-		aps, username, password string,
+		_ context.Context,
+		_ *http.Request,
+		_, username, password string,
 	) error {
 		if username != "testuser" || password != "xyzzy" {
 			return errors.New("bad credentials")
@@ -834,7 +845,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *x509.Certificate, string) {
 
 	s := httptest.NewUnstartedServer(r)
 
-	s.Config.ErrorLog = log.New(ioutil.Discard, "", 0)
+	s.Config.ErrorLog = log.New(io.Discard, "", 0)
 
 	var clientCAs = x509.NewCertPool()
 	clientCAs.AddCert(caCerts[len(caCerts)-1])
@@ -907,7 +918,7 @@ func makeCmdFlagSet(t *testing.T, cmd string, args []string) *flag.FlagSet {
 		t.Fatalf("command not recognized: %s", cmd)
 	}
 
-	set := fcmd.FlagSet(ioutil.Discard, 80)
+	set := fcmd.FlagSet(io.Discard, 80)
 	if err := set.Parse(args); err != nil {
 		t.Fatalf("failed to parse flag set: %v", err)
 	}
@@ -918,7 +929,7 @@ func makeCmdFlagSet(t *testing.T, cmd string, args []string) *flag.FlagSet {
 func makeRootCertFile(t *testing.T, cert *x509.Certificate) (string, func(t *testing.T)) {
 	t.Helper()
 
-	f, err := ioutil.TempFile("", "estclient_test_")
+	f, err := os.CreateTemp("", "estclient_test_")
 	if err != nil {
 		t.Fatalf("failed to create temporary file: %v", err)
 	}
@@ -951,6 +962,38 @@ func verifyErrorTextContains(t *testing.T, got, want error) {
 	}
 }
 
+// verifyErrorTextContainsOneOf tests if the error text contains one of the strings.
+// This is useful for testing errors that output different text on different
+// platforms or between versions.
+func verifyErrorTextContainsOneOf(t *testing.T, got error, wants []error) {
+	t.Helper()
+
+	if got == nil && len(wants) == 0 {
+		return
+	}
+
+	if got == nil && len(wants) > 0 {
+		t.Fatalf("got nil, want one of %v", wants)
+	}
+
+	if got != nil && len(wants) == 0 {
+		t.Fatalf("got %v, want no error", got)
+	}
+
+	// got != nil && len(wants) > 0
+
+	contains := false
+	for _, w := range wants {
+		if strings.Contains(got.Error(), w.Error()) {
+			contains = true
+		}
+	}
+
+	if !contains {
+		t.Fatalf("got error %v, want one of %v", got, wants)
+	}
+}
+
 // assertPKIXNamesEqual tests if two pkix.Name objects are equal in all
 // respects other than the ordering of the name attributes.
 func assertPKIXNamesEqual(t *testing.T, first, second pkix.Name) {
@@ -972,11 +1015,7 @@ func assertPKIXNamesEqual(t *testing.T, first, second pkix.Name) {
 				}
 			}
 
-			if s[i].Value.(string) < s[j].Value.(string) {
-				return true
-			}
-
-			return false
+			return s[i].Value.(string) < s[j].Value.(string)
 		}
 	}
 

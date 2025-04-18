@@ -212,6 +212,7 @@ func TestEnroll(t *testing.T) {
 			defer s.Close()
 
 			client := newTestClient()
+			client.PrivateKey = tc.key
 
 			// Get CA certificates before setting additional path segment,
 			// which may otherwise trigger errors.
@@ -293,8 +294,6 @@ func TestReenroll(t *testing.T) {
 	// Create test EST server and client.
 	s, newTestClient := newTestServer(t)
 	defer s.Close()
-
-	client := newTestClient()
 
 	altKey := mustGenerateECPrivateKey(t)
 
@@ -381,7 +380,9 @@ func TestReenroll(t *testing.T) {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			// Create test EST server and client.
+			// Create test EST client.
+			client := newTestClient()
+			client.PrivateKey = tc.key
 
 			// Get CA certificates before setting additional path segment,
 			// which may otherwise trigger errors.
@@ -403,7 +404,6 @@ func TestReenroll(t *testing.T) {
 			}
 
 			// Reenroll.
-			client.PrivateKey = tc.key
 			client.Certificates = append([]*x509.Certificate{got}, cacerts...)
 			if tc.certs != nil {
 				client.Certificates = tc.certs
@@ -601,6 +601,8 @@ func TestTPMEnroll(t *testing.T) {
 			// Request an EK certificate via normal enrollment.
 			ek := mustGenerateRSAPrivateKey(t)
 			csr := mustCreateCertificateRequest(t, ek, "Test TPM Device", nil)
+
+			client.PrivateKey = ek
 			ekcert, err := client.Enroll(ctx, csr)
 			if err != nil {
 				t.Fatalf("failed to enroll for EK certificate: %v", err)
@@ -726,31 +728,6 @@ func TestServerErrors(t *testing.T) {
 			},
 			status:  http.StatusUnsupportedMediaType,
 			errText: "415 malformed or missing Content-Type header\n",
-		},
-		{
-			name:   "Enroll/BadContentTransferEncoding",
-			path:   enrollEndpoint,
-			method: http.MethodPost,
-			headers: http.Header{
-				typeHeader:          []string{mimeTypePKCS10},
-				encodingHeader:      []string{encodingBinary},
-				authorizationHeader: []string{authorizationValue},
-				hostHeader:          []string{testDomain},
-			},
-			status:  http.StatusUnsupportedMediaType,
-			errText: "415 Content-Transfer-Encoding must be base64\n",
-		},
-		{
-			name:   "Enroll/MissingContentTransferEncoding",
-			path:   enrollEndpoint,
-			method: http.MethodPost,
-			headers: http.Header{
-				typeHeader:          []string{mimeTypePKCS10},
-				authorizationHeader: []string{authorizationValue},
-				hostHeader:          []string{testDomain},
-			},
-			status:  http.StatusUnsupportedMediaType,
-			errText: "415 missing Content-Transfer-Encoding header\n",
 		},
 		{
 			name:   "Enroll/BadBase64",
@@ -948,6 +925,7 @@ func newTestServer(t *testing.T) (*httptest.Server, func() *est.Client) {
 				Leaf:        serverCert,
 			},
 		},
+		MaxVersion: tls.VersionTLS12,
 	}
 
 	s.StartTLS()

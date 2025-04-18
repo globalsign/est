@@ -30,9 +30,8 @@ section 24 of the Trusted Platform Module 2.0 Library specification.
 
 ## Installation
 
-    go get github.com/globalsign/est
-    go install github.com/globalsign/est/cmd/estserver
-    go install github.com/globalsign/est/cmd/estclient
+    go install github.com/globalsign/est/cmd/estserver@latest
+    go install github.com/globalsign/est/cmd/estclient@latest
 
 ## Quickstart
 
@@ -116,3 +115,8 @@ use that chain to reenroll:
 Note that when we omit the `-csr` option when reenrolling, the EST client
 automatically generates a CSR for us by copying the subject field and subject
 alternative name extension from the certificate we're renewing.
+
+### EST client samples
+
+Basic enroll operation is available under `cmd/sample` directory.  
+In any case, sample can be changed to meet user requirements : change user credentials, create a different signing key, enroll a different CSR etc.
