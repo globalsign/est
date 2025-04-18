@@ -28,6 +28,8 @@ import (
 func TestCSRAttrsMarshal(t *testing.T) {
 	t.Parallel()
 
+	type oidSET []asn1.ObjectIdentifier
+
 	var testcases = []struct {
 		name  string
 		attrs est.CSRAttrs
@@ -114,6 +116,8 @@ func TestCSRAttrsMarshal(t *testing.T) {
 
 func TestCSRAttrsUnmarshal(t *testing.T) {
 	t.Parallel()
+
+	type oidSET []asn1.ObjectIdentifier
 
 	var testcases = []struct {
 		name string
