@@ -54,7 +54,7 @@ type CertificateRequest struct {
 // Copied from https://github.com/micromdm/scep/blob/main/cryptoutil/x509util/x509util.go#L58
 func CreateCertificateRequest(rand io.Reader, template *CertificateRequest, priv any) (csr []byte, err error) {
 	if template == nil {
-		return nil, errors.New("make sure to rovide a certificate request template")
+		return nil, errors.New("make sure to provide a certificate request template")
 	}
 
 	if template.ChallengePassword == "" {
