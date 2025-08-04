@@ -25,7 +25,7 @@ import (
 	"log"
 	"math/big"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"github.com/google/go-tpm/tpmutil"
 	"go.mozilla.org/pkcs7"
 
@@ -185,7 +185,7 @@ func tpmenroll(w io.Writer, set *flag.FlagSet) error {
 	}
 	defer tpm2.FlushContext(tpm, sess)
 
-	if _, err := tpm2.PolicySecret(tpm, tpm2.HandleEndorsement,
+	if _, _, err := tpm2.PolicySecret(tpm, tpm2.HandleEndorsement,
 		tpm2.AuthCommand{
 			Session:    tpm2.HandlePasswordSession,
 			Attributes: tpm2.AttrContinueSession,

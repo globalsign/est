@@ -35,7 +35,7 @@ import (
 	"github.com/globalsign/est"
 	"github.com/globalsign/est/internal/mockca"
 	"github.com/globalsign/est/internal/tpm"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"go.mozilla.org/pkcs7"
 )
 

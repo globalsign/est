@@ -7,7 +7,7 @@ require (
 	github.com/globalsign/pemfile v1.0.0
 	github.com/globalsign/tpmkeys v1.0.3
 	github.com/go-chi/chi v4.1.2+incompatible
-	github.com/google/go-tpm v0.3.2
+	github.com/google/go-tpm v0.9.5
 	go.mozilla.org/pkcs7 v0.0.0-20200128120323-432b2356ecb1
 	golang.org/x/crypto v0.31.0
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba

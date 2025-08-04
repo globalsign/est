@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/globalsign/est/internal/tpm"
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 )
 
 func TestMakeAndExtractCredential(t *testing.T) {
