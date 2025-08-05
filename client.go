@@ -76,6 +76,11 @@ type Client struct {
 	// Trusted Platform Module (TPM) or other hardware device.
 	PrivateKey interface{}
 
+	// SigningKey is an optional private key to use for signing CSRs during initial enrollment.
+	// 
+	// If not set, the challenge password field will not be included in the CSR.
+	SigningKey interface{}
+
 	// AdditionalHeaders are additional HTTP headers to include with the
 	// request to the EST server.
 	AdditionalHeaders map[string]string
@@ -204,7 +209,7 @@ func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, r
 	}
 
 	crBs := r.Raw
-	if tlsUnique64 != "" {
+	if tlsUnique64 != "" && c.SigningKey != nil {
 		crBs, err = c.addChallengePassword(r.Raw, tlsUnique64)
 		if err != nil {
 			return nil, err
@@ -496,7 +501,7 @@ func (c *Client) addChallengePassword(csr []byte, challengePassword string) ([]b
 		CertificateRequest: *standardLibCsr,
 		ChallengePassword:  challengePassword,
 	}
-	crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.PrivateKey)
+	crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.SigningKey)
 	return crBs, err
 }
 
