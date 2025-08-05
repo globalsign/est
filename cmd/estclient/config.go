@@ -51,6 +51,7 @@ type config struct {
 	Password          string            `json:"password"`
 	Explicit          string            `json:"explicit_anchor"`
 	Implicit          string            `json:"implicit_anchor"`
+	SigningKey        *privateKey       `json:"signing_key,omitempty"`
 	PrivateKey        *privateKey       `json:"private_key,omitempty"`
 	Certificates      string            `json:"client_certificates"`
 	certificates      []*x509.Certificate
@@ -63,6 +64,7 @@ type config struct {
 	implicitAnchor    *x509.CertPool
 	insecure          bool
 	openPrivateKey    interface{}
+	openSigningKey    interface{}
 	separator         string
 	timeout           time.Duration
 }
@@ -148,6 +150,7 @@ func (cfg *config) MakeClient() (*est.Client, error) {
 		ImplicitAnchor:        cfg.implicitAnchor,
 		HostHeader:            cfg.HostHeader,
 		PrivateKey:            cfg.openPrivateKey,
+		SigningKey:            cfg.openSigningKey,
 		Certificates:          cfg.certificates,
 		Username:              cfg.Username,
 		Password:              cfg.Password,
@@ -166,10 +169,14 @@ func (cfg *config) MakeClient() (*est.Client, error) {
 // nil, the private key from the configuration will be used.
 func (cfg *config) GenerateCSR(key interface{}) (*x509.CertificateRequest, error) {
 	if key == nil {
-		if cfg.openPrivateKey == nil {
+		switch {
+		case cfg.openSigningKey != nil:
+			key = cfg.openSigningKey
+		case cfg.openPrivateKey != nil:
+			key = cfg.openPrivateKey
+		default:
 			return nil, errNoPrivateKey
 		}
-		key = cfg.openPrivateKey
 	}
 
 	tmpl, err := cfg.CSRTemplate()
@@ -626,6 +633,22 @@ func newConfig(set *flag.FlagSet) (config, error) {
 		}
 
 		cfg.openPrivateKey = privkey
+		cfg.closeFuncs = append(cfg.closeFuncs, closeFunc)
+	}
+
+	// Process signing key. Note that a signing key located in a file is the
+	// only type which can be specified at the command line.
+	if filename, ok := cfg.flags[signingKeyFlag]; ok {
+		cfg.SigningKey = &privateKey{Path: fullPath(wd, filename)}
+	}
+
+	if cfg.SigningKey != nil {
+		signingkey, closeFunc, err := cfg.SigningKey.Get(cfg.baseDir)
+		if err != nil {
+			return config{}, fmt.Errorf("failed to get signing key: %v", err)
+		}
+
+		cfg.openSigningKey = signingkey
 		cfg.closeFuncs = append(cfg.closeFuncs, closeFunc)
 	}
 

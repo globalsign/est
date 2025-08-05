@@ -89,6 +89,7 @@ const (
 	separatorFlag          = "separator"
 	serialNumberFlag       = "sn"
 	serverFlag             = "server"
+	signingKeyFlag         = "signingkey"
 	streetAddressFlag      = "street"
 	timeoutFlag            = "timeout"
 	tpmFlag                = "tpm"
@@ -238,6 +239,11 @@ var optDefs = map[string]option{
 	serverFlag: {
 		argFmt:       hostFmt,
 		desc:         "server host and port",
+		defaultValue: "",
+	},
+	signingKeyFlag: {
+		argFmt:       pathFmt,
+		desc:         "CSR signing key",
 		defaultValue: "",
 	},
 	usernameFlag: {
