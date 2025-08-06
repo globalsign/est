@@ -176,6 +176,7 @@ func init() {
 				passwordFlag,
 				separatorFlag,
 				serverFlag,
+				signingKeyFlag,
 				usernameFlag,
 				timeoutFlag,
 			},

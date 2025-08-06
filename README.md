@@ -9,18 +9,18 @@ enrollment protocol as defined by [RFC7030](https://tools.ietf.org/html/rfc7030)
 
 The implementation provides:
 
- * An EST client library;
- * An EST client command line utility using the client library; and
- * An EST server which can be used for testing and development purposes.
+* An EST client library;
+* An EST client command line utility using the client library; and
+* An EST server which can be used for testing and development purposes.
 
 The implementation is intended to be mostly feature-complete, including
 support for:
 
- * The optional `/csrattrs` and `/serverkeygen` operations, with support for
+* The optional `/csrattrs` and `/serverkeygen` operations, with support for
    server-generated private keys returned with or without additional
    encryption
- * The optional additional path segment
- * Optional HTTP-based client authentication on top of certificate-based
+* The optional additional path segment
+* Optional HTTP-based client authentication on top of certificate-based
    TLS authentication
 
 In addition, a non-standard operation is implemented enabling EST-like
