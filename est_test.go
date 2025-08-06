@@ -41,7 +41,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-tpm/tpm2"
+	"github.com/google/go-tpm/legacy/tpm2"
 	"go.mozilla.org/pkcs7"
 
 	"github.com/globalsign/est"
