@@ -32,6 +32,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/smallstep/scep/x509util"
 )
 
 const (
@@ -77,7 +79,7 @@ type Client struct {
 	PrivateKey interface{}
 
 	// SigningKey is an optional private key to use for signing CSRs during initial enrollment.
-	// 
+	//
 	// If not set, the challenge password field will not be included in the CSR.
 	SigningKey interface{}
 
@@ -496,12 +498,12 @@ func (c *Client) addChallengePassword(csr []byte, challengePassword string) ([]b
 		return csr, nil
 	}
 
-	standardLibCsr, _ := x509.ParseCertificateRequest(csr)
-	cr := CertificateRequest{
-		CertificateRequest: *standardLibCsr,
+	stdCsr, _ := x509.ParseCertificateRequest(csr)
+	cr := x509util.CertificateRequest{
+		CertificateRequest: *stdCsr,
 		ChallengePassword:  challengePassword,
 	}
-	crBs, err := CreateCertificateRequest(rand.Reader, &cr, c.SigningKey)
+	crBs, err := x509util.CreateCertificateRequest(rand.Reader, &cr, c.SigningKey)
 	return crBs, err
 }
 
