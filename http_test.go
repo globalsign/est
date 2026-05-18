@@ -28,7 +28,7 @@ func TestVerifyResponseType(t *testing.T) {
 	var testcases = []struct {
 		name string
 		r    *http.Response
-		t    string
+		t    []string
 		e    string
 		err  error
 	}{
@@ -40,7 +40,7 @@ func TestVerifyResponseType(t *testing.T) {
 					"Content-Transfer-Encoding": []string{"BasE64"},
 				},
 			},
-			t: "application/pkcs7",
+			t: []string{"application/pkcs7"},
 			e: "bASe64",
 		},
 		{
@@ -51,7 +51,7 @@ func TestVerifyResponseType(t *testing.T) {
 					"Content-Transfer-Encoding": []string{"base64"},
 				},
 			},
-			t:   "application/pkcs10",
+			t:   []string{"application/pkcs10"},
 			e:   "base64",
 			err: errors.New("unexpected Content-Type: application/pkcs7"),
 		},
@@ -62,7 +62,7 @@ func TestVerifyResponseType(t *testing.T) {
 					"Content-Transfer-Encoding": []string{"base64"},
 				},
 			},
-			t:   "application/pkcs7",
+			t:   []string{"application/pkcs7"},
 			e:   "base64",
 			err: errors.New("missing or malformed Content-Type header: mime: no media type"),
 		},
@@ -74,9 +74,43 @@ func TestVerifyResponseType(t *testing.T) {
 					"Content-Transfer-Encoding": []string{"base64"},
 				},
 			},
-			t:   "application/pkcs7",
+			t:   []string{"application/pkcs7"},
 			e:   "base64",
 			err: errors.New("missing or malformed Content-Type header: mime: invalid media parameter"),
+		},
+		{
+			name: "CSRAttrsRFC7030",
+			r: &http.Response{
+				Header: http.Header{
+					"Content-Type":              []string{"application/pkcs7-mime"},
+					"Content-Transfer-Encoding": []string{"base64"},
+				},
+			},
+			t: []string{"application/csrattrs", "application/pkcs7-mime"},
+			e: "base64",
+		},
+		{
+			name: "CSRAttrsNonStandard",
+			r: &http.Response{
+				Header: http.Header{
+					"Content-Type":              []string{"application/csrattrs"},
+					"Content-Transfer-Encoding": []string{"base64"},
+				},
+			},
+			t: []string{"application/csrattrs", "application/pkcs7-mime"},
+			e: "base64",
+		},
+		{
+			name: "CSRAttrsWrongType",
+			r: &http.Response{
+				Header: http.Header{
+					"Content-Type":              []string{"application/pkcs10"},
+					"Content-Transfer-Encoding": []string{"base64"},
+				},
+			},
+			t:   []string{"application/csrattrs", "application/pkcs7-mime"},
+			e:   "base64",
+			err: errors.New("unexpected Content-Type: application/pkcs10"),
 		},
 	}
 

@@ -234,18 +234,20 @@ func verifyPartType(part *multipart.Part, ct, ce, pos string) error {
 
 // verifyResponseType verifies if the content-type and content-transfer-encoding
 // of an HTTP response are as expected. It returns a normal error and is intended
-// to be used by client code.
-func verifyResponseType(r *http.Response, t, e string) error {
+// to be used by client code. Multiple acceptable content types may be provided;
+// the response content type must match at least one of them.
+func verifyResponseType(r *http.Response, t []string, e string) error {
 	ctype, _, err := mime.ParseMediaType(r.Header.Get(contentTypeHeader))
 	if err != nil {
 		return fmt.Errorf("missing or malformed %s header: %w", contentTypeHeader, err)
 	}
 
-	if !strings.HasPrefix(ctype, t) {
-		return fmt.Errorf("unexpected %s: %s", contentTypeHeader, ctype)
+	for _, accepted := range t {
+		if strings.HasPrefix(ctype, accepted) {
+			return nil
+		}
 	}
-
-	return nil
+	return fmt.Errorf("unexpected %s: %s", contentTypeHeader, ctype)
 }
 
 // verifyPartTypeResponse verifies if the content-type and content-transfer-encoding

@@ -139,7 +139,7 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 		return nil, err
 	}
 
-	if err := verifyResponseType(resp, mimeTypePKCS7, encodingTypeBase64); err != nil {
+	if err := verifyResponseType(resp, []string{mimeTypePKCS7}, encodingTypeBase64); err != nil {
 		return nil, err
 	}
 
@@ -181,7 +181,7 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		return CSRAttrs{}, err
 	}
 
-	if err := verifyResponseType(resp, mimeTypeCSRAttrs, encodingTypeBase64); err != nil {
+	if err := verifyResponseType(resp, []string{mimeTypeCSRAttrs, mimeTypePKCS7}, encodingTypeBase64); err != nil {
 		return CSRAttrs{}, err
 	}
 
@@ -234,7 +234,7 @@ func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, r
 		return nil, err
 	}
 
-	if err := verifyResponseType(resp, mimeTypePKCS7, encodingTypeBase64); err != nil {
+	if err := verifyResponseType(resp, []string{mimeTypePKCS7}, encodingTypeBase64); err != nil {
 		return nil, err
 	}
 
