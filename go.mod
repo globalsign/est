@@ -9,7 +9,7 @@ require (
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/google/go-tpm v0.9.6
 	github.com/smallstep/scep v0.0.0-20250318231241-a25cabb69492
-	go.mozilla.org/pkcs7 v0.0.0-20200128120323-432b2356ecb1
+	go.mozilla.org/pkcs7 v0.10.0
 	golang.org/x/crypto v0.52.0
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
 )
