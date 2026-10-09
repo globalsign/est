@@ -584,7 +584,8 @@ func (c *Client) uri(endpoint string) string {
 	var builder strings.Builder
 
 	builder.WriteString("https://")
-	builder.WriteString(c.Host)
+	// IPv6 link-local endpoints must escape % symbol, e.g., fe80::1%eth0
+	builder.WriteString(strings.ReplaceAll(c.Host, "%", "%25"))
 	builder.WriteString(estPathPrefix)
 
 	if c.AdditionalPathSegment != "" {
