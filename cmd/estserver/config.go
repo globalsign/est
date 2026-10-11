@@ -29,6 +29,7 @@ type config struct {
 	HealthCheckPassword string        `json:"healthcheck_password"`
 	RateLimit           int           `json:"rate_limit"`
 	Timeout             int           `json:"timeout"`
+	TrustProxyHeaders   bool          `json:"trust_proxy_headers"`
 	Logfile             string        `json:"log_file"`
 }
 
@@ -85,6 +86,7 @@ const sample = `{
     "healthcheck_password": "xyzzy",
     "rate_limit": 150,
     "timeout": 30,
+    "trust_proxy_headers": false,
     "log_file": "/path/to/log.file"
 }`
 
