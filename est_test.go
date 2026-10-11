@@ -38,6 +38,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -147,6 +148,69 @@ func TestCSRAttrs(t *testing.T) {
 				t.Fatalf("got %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestClientContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	// The listener never accepts, so the TLS handshake never completes.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	client := est.Client{Host: ln.Addr().String(), InsecureSkipVerify: true}
+
+	errc := make(chan error, 1)
+	go func() {
+		_, err := client.CACerts(ctx)
+		errc <- err
+	}()
+
+	select {
+	case err := <-errc:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("got error %v, want %v", err, context.DeadlineExceeded)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("CACerts did not return after the context deadline")
+	}
+}
+
+func TestClientClosesConnections(t *testing.T) {
+	t.Parallel()
+
+	var open int64
+	s := httptest.NewUnstartedServer(http.NotFoundHandler())
+	s.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			atomic.AddInt64(&open, 1)
+		case http.StateClosed:
+			atomic.AddInt64(&open, -1)
+		}
+	}
+	s.StartTLS()
+	defer s.Close()
+
+	client := est.Client{Host: strings.TrimPrefix(s.URL, "https://"), InsecureSkipVerify: true}
+	for i := 0; i < 3; i++ {
+		if _, err := client.CACerts(context.Background()); err == nil {
+			t.Fatal("CACerts unexpectedly succeeded")
+		}
+	}
+
+	deadline := time.Now().Add(testTimeout)
+	for atomic.LoadInt64(&open) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d connections still open", atomic.LoadInt64(&open))
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
