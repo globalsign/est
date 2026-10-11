@@ -222,12 +222,13 @@ func main() {
 
 	// Create server mux.
 	r, err := est.NewRouter(&est.ServerConfig{
-		CA:             ca,
-		Logger:         logger,
-		AllowedHosts:   cfg.AllowedHosts,
-		Timeout:        time.Duration(cfg.Timeout) * time.Second,
-		RateLimit:      cfg.RateLimit,
-		CheckBasicAuth: pwfunc,
+		CA:                ca,
+		Logger:            logger,
+		AllowedHosts:      cfg.AllowedHosts,
+		Timeout:           time.Duration(cfg.Timeout) * time.Second,
+		RateLimit:         cfg.RateLimit,
+		CheckBasicAuth:    pwfunc,
+		TrustProxyHeaders: cfg.TrustProxyHeaders,
 	})
 	if err != nil {
 		log.Fatalf("failed to create new EST router: %v", err)
