@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"reflect"
 
 	"github.com/google/go-tpm/legacy/tpm2"
@@ -151,6 +152,11 @@ func readCSRAttrsResponse(r io.Reader) (CSRAttrs, error) {
 func readAllBase64Request(r io.Reader) ([]byte, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return nil, errBodyTooLarge
+		}
+
 		return nil, errInternal
 	}
 

@@ -637,10 +637,12 @@ func verifyAllowedHosts(allowed []string) func(next http.Handler) http.Handler {
 			if host, _, err := net.SplitHostPort(reqHost); err == nil {
 				reqHost = host
 			}
+			reqHost = strings.Trim(reqHost, "[]")
 
 			goodHost := false
 			for _, host := range allowed {
-				if strings.EqualFold(host, reqHost) {
+				// IPv6 addresses may be listed with or without brackets.
+				if strings.EqualFold(strings.Trim(host, "[]"), reqHost) {
 					goodHost = true
 					break
 				}

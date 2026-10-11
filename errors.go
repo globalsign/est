@@ -37,6 +37,10 @@ var (
 		status: http.StatusBadRequest,
 		desc:   "unable to parse request body",
 	}
+	errBodyTooLarge = &estError{
+		status: http.StatusRequestEntityTooLarge,
+		desc:   "request body too large",
+	}
 	errExtractPublicAreaKey = &estError{
 		status: http.StatusBadRequest,
 		desc:   "unable to extract public key from TPM object public area",
