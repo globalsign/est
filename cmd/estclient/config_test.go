@@ -34,6 +34,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -238,6 +239,48 @@ func TestNewConfigHardware(t *testing.T) {
 	}
 }
 
+func TestReadAKPublicRelativePath(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	want := []byte("public area")
+	if err := os.WriteFile(filepath.Join(dir, "ak.pub"), want, 0600); err != nil {
+		t.Fatalf("failed to write public area: %v", err)
+	}
+
+	cfg := config{
+		baseDir:    dir,
+		PrivateKey: &privateKey{TPM: &tpmKey{Public: "ak.pub"}},
+	}
+
+	got, err := readAKPublic(&cfg)
+	if err != nil {
+		t.Fatalf("failed to read public area: %v", err)
+	}
+
+	if !bytes.Equal(got, want) {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestTPMEnrollNoPrivateKey(t *testing.T) {
+	t.Parallel()
+
+	err := tpmenroll(io.Discard, makeCmdFlagSet(t, tpmenrollCmd, nil))
+	if !errors.Is(err, errNoPrivateKey) {
+		t.Fatalf("got error %v, want %v", err, errNoPrivateKey)
+	}
+}
+
+func TestHSMKeyNoKeyID(t *testing.T) {
+	t.Parallel()
+
+	k := hsmKey{LibraryPath: "/nonexistent/libpkcs11.so", PIN: "1234"}
+	if _, _, err := k.Get(""); !errors.Is(err, errNoHSMKeyID) {
+		t.Fatalf("got error %v, want %v", err, errNoHSMKeyID)
+	}
+}
+
 func TestCACerts(t *testing.T) {
 	t.Parallel()
 
@@ -284,6 +327,16 @@ func TestCACerts(t *testing.T) {
 				"-" + serverFlag, uri,
 				"-" + apsFlag, "otherthing",
 				"-" + implicitAnchorFlag, cafile,
+			},
+		},
+		{
+			name: "FilterFlagsFalse",
+			args: []string{
+				"-" + serverFlag, uri,
+				"-" + explicitAnchorFlag, cafile,
+				"-" + rootsOnlyFlag + "=false",
+				"-" + intermediatesOnlyFlag + "=false",
+				"-" + rootOutFlag + "=false",
 			},
 		},
 		{
@@ -625,6 +678,43 @@ func TestServerKeyGen(t *testing.T) {
 	}
 }
 
+// failFirstWriter fails the first write and accepts all later writes.
+type failFirstWriter struct {
+	failed bool
+}
+
+func (w *failFirstWriter) Write(p []byte) (int, error) {
+	if !w.failed {
+		w.failed = true
+		return 0, errors.New("write failed")
+	}
+
+	return len(p), nil
+}
+
+func TestServerKeyGenWriteError(t *testing.T) {
+	t.Parallel()
+
+	s, rootCert, uri := newTestServer(t)
+	defer s.Close()
+
+	cafile, remove := makeRootCertFile(t, rootCert)
+	defer remove(t)
+
+	args := []string{
+		"-" + serverFlag, uri,
+		"-" + explicitAnchorFlag, cafile,
+		"-" + commonNameFlag, "Jackie Doe",
+		"-" + usernameFlag, "testuser",
+		"-" + passwordFlag, "xyzzy",
+	}
+
+	// The private key is written first, so its write fails.
+	if err := serverkeygen(&failFirstWriter{}, makeCmdFlagSet(t, serverkeygenCmd, args)); err == nil {
+		t.Fatal("serverkeygen succeeded although writing the private key failed")
+	}
+}
+
 func TestCSR(t *testing.T) {
 	t.Parallel()
 
@@ -753,6 +843,14 @@ func TestSampleConfig(t *testing.T) {
 				"-" + tpmFlag,
 			},
 			length: 773,
+		},
+		{
+			name: "HSMAndTPMFalse",
+			args: []string{
+				"-" + hsmFlag + "=false",
+				"-" + tpmFlag + "=false",
+			},
+			length: 319,
 		},
 	}
 
