@@ -102,9 +102,9 @@ func sampleconfig(w io.Writer, set *flag.FlagSet) error {
 	}
 	defer closeFunc()
 
-	if cfg.FlagWasPassed(hsmFlag) {
+	if cfg.FlagIsTrue(hsmFlag) {
 		fmt.Fprint(out, hsmSample)
-	} else if cfg.FlagWasPassed(tpmFlag) {
+	} else if cfg.FlagIsTrue(tpmFlag) {
 		fmt.Fprint(out, tpmSample)
 	} else {
 		fmt.Fprint(out, fileSample)
