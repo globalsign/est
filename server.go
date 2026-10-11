@@ -307,7 +307,7 @@ func enroll(w http.ResponseWriter, r *http.Request) {
 		// This server does not support clients which do not support TLS client
 		// authentication for renew operations.
 
-		if len(r.TLS.PeerCertificates) == 0 {
+		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			errNoClientCertificate.Write(w)
 			return
 		}
@@ -581,6 +581,8 @@ func recoverer(logger Logger) func(next http.Handler) http.Handler {
 						"Panic Value", rcv,
 						"Stack Trace", string(debug.Stack()),
 					)
+
+					errInternal.Write(w)
 				}
 			}()
 
