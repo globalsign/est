@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/google/go-tpm/legacy/tpm2"
+	"github.com/smallstep/scep/x509util"
 	"go.mozilla.org/pkcs7"
 
 	"github.com/globalsign/est"
@@ -283,6 +284,145 @@ func TestEnroll(t *testing.T) {
 			}
 
 			verifyPublicKey(t, cert.PublicKey, tc.key)
+		})
+	}
+}
+
+// TestEnrollChallengePassword checks channel binding and preservation of CSR data.
+func TestEnrollChallengePassword(t *testing.T) {
+	t.Parallel()
+
+	var testcases = []struct {
+		name string
+		tmpl *x509.CertificateRequest
+	}{
+		{
+			name: "SubjectOnly",
+			tmpl: &x509.CertificateRequest{
+				Subject: pkix.Name{CommonName: "Jane Doe"},
+			},
+		},
+		{
+			name: "SubjectAltName",
+			tmpl: &x509.CertificateRequest{
+				Subject:  pkix.Name{CommonName: "Jane Doe"},
+				DNSNames: []string{"jane.example.com"},
+			},
+		},
+		{
+			name: "CriticalExtension",
+			tmpl: &x509.CertificateRequest{
+				Subject:  pkix.Name{CommonName: "Jane Doe"},
+				DNSNames: []string{"jane.example.com"},
+				Attributes: []pkix.AttributeTypeAndValueSET{
+					{
+						Type: asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 55555, 1},
+						Value: [][]pkix.AttributeTypeAndValue{{{
+							Type:  asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 55555, 2},
+							Value: "enrollment-policy",
+						}}},
+					},
+				},
+				ExtraExtensions: []pkix.Extension{
+					{
+						Id:       asn1.ObjectIdentifier{2, 5, 29, 15},
+						Critical: true,
+						Value:    []byte{0x03, 0x02, 0x07, 0x80},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			type received struct {
+				csr       *x509.CertificateRequest
+				tlsUnique []byte
+			}
+			ch := make(chan received, 1)
+
+			// tls-unique is only available up to TLS 1.2.
+			s := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, _ := ioutil.ReadAll(r.Body)
+				der, _ := base64.StdEncoding.DecodeString(string(body))
+				csr, _ := x509.ParseCertificateRequest(der)
+				ch <- received{csr: csr, tlsUnique: r.TLS.TLSUnique}
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			s.TLS = &tls.Config{MaxVersion: tls.VersionTLS12}
+			s.StartTLS()
+			defer s.Close()
+
+			key := mustGenerateECPrivateKey(t)
+
+			der, err := x509.CreateCertificateRequest(rand.Reader, tc.tmpl, key)
+			if err != nil {
+				t.Fatalf("failed to create certificate request: %v", err)
+			}
+
+			csr, err := x509.ParseCertificateRequest(der)
+			if err != nil {
+				t.Fatalf("failed to parse certificate request: %v", err)
+			}
+
+			client := est.Client{
+				Host:               strings.TrimPrefix(s.URL, "https://"),
+				InsecureSkipVerify: true,
+				SigningKey:         key,
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			defer cancel()
+
+			_, err = client.Enroll(ctx, csr)
+			var estErr est.Error
+			if !errors.As(err, &estErr) || estErr.StatusCode() != http.StatusServiceUnavailable {
+				t.Fatalf("got enrollment error %v, want HTTP 503", err)
+			}
+
+			var got received
+			select {
+			case got = <-ch:
+			case <-ctx.Done():
+				t.Fatal("server did not receive the certificate request")
+			}
+			if got.csr == nil {
+				t.Fatal("server failed to parse certificate request")
+			}
+
+			if err := got.csr.CheckSignature(); err != nil {
+				t.Fatalf("failed to verify certificate request signature: %v", err)
+			}
+
+			pw, err := x509util.ParseChallengePassword(got.csr.Raw)
+			if err != nil {
+				t.Fatalf("failed to parse challenge password: %v", err)
+			}
+
+			if want := base64.StdEncoding.EncodeToString(got.tlsUnique); pw != want {
+				t.Fatalf("got challenge password %q, want %q", pw, want)
+			}
+
+			if !reflect.DeepEqual(got.csr.Extensions, csr.Extensions) {
+				t.Fatalf("got extensions %v, want %v", got.csr.Extensions, csr.Extensions)
+			}
+			for _, want := range tc.tmpl.Attributes {
+				found := false
+				for _, attr := range got.csr.Attributes {
+					if reflect.DeepEqual(attr, want) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Fatalf("missing CSR attribute %v", want)
+				}
+			}
 		})
 	}
 }
