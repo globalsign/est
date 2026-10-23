@@ -54,7 +54,9 @@ func tpmenroll(w io.Writer, set *flag.FlagSet) error {
 	}()
 
 	// Ensure all required TPM fields are present.
-	if cfg.PrivateKey.TPM == nil {
+	if cfg.PrivateKey == nil {
+		return errNoPrivateKey
+	} else if cfg.PrivateKey.TPM == nil {
 		return errNoTPMPrivateKey
 	} else if len(cfg.ekcerts) == 0 {
 		return errNoTPMEKCerts
@@ -144,12 +146,12 @@ func tpmenroll(w io.Writer, set *flag.FlagSet) error {
 			return errors.New("no private area provided")
 		}
 
-		pub, err := ioutil.ReadFile(pubfile)
+		pub, err := ioutil.ReadFile(fullPath(cfg.baseDir, pubfile))
 		if err != nil {
 			return fmt.Errorf("failed to read public area: %v", err)
 		}
 
-		priv, err := ioutil.ReadFile(privfile)
+		priv, err := ioutil.ReadFile(fullPath(cfg.baseDir, privfile))
 		if err != nil {
 			return fmt.Errorf("failed to read private area: %v", err)
 		}
@@ -237,7 +239,9 @@ func tpmenroll(w io.Writer, set *flag.FlagSet) error {
 	}
 	defer closeFunc()
 
-	pemfile.WriteCert(out, cert)
+	if err := pemfile.WriteCert(out, cert); err != nil {
+		return fmt.Errorf("failed to write certificate: %v", err)
+	}
 
 	return nil
 }
@@ -277,7 +281,7 @@ func readAKPublic(cfg *config) ([]byte, error) {
 	// First check if the public area has been referenced in a file, and read
 	// and return if it has.
 	if cfg.PrivateKey.TPM.Public != "" {
-		data, err := ioutil.ReadFile(cfg.PrivateKey.TPM.Public)
+		data, err := ioutil.ReadFile(fullPath(cfg.baseDir, cfg.PrivateKey.TPM.Public))
 		if err != nil {
 			return nil, fmt.Errorf("failed to read public area: %v", err)
 		}

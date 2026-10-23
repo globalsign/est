@@ -141,24 +141,25 @@ func enrollCommon(w io.Writer, set *flag.FlagSet, renew, keygen bool) error {
 
 	// Output key if received.
 	if key != nil {
+		blockType := "PRIVATE KEY"
+		if _, err := x509.ParsePKCS8PrivateKey(key); err != nil {
+			if _, err := pkcs7.Parse(key); err != nil {
+				return errors.New("unrecognized private key format")
+			}
+			blockType = "PKCS7"
+		}
+
 		out, closeFunc, err := maybeRedirect(w, cfg.FlagValue(keyOutFlag), 0600)
 		if err != nil {
 			return err
 		}
-		defer closeFunc()
 
-		if _, err := x509.ParsePKCS8PrivateKey(key); err == nil {
-			pemfile.WriteBlock(out, &pem.Block{
-				Type:  "PRIVATE KEY",
-				Bytes: key,
-			})
-		} else if _, err := pkcs7.Parse(key); err == nil {
-			pemfile.WriteBlock(out, &pem.Block{
-				Type:  "PKCS7",
-				Bytes: key,
-			})
-		} else {
-			return errors.New("unrecognized private key format")
+		err = pemfile.WriteBlock(out, &pem.Block{Type: blockType, Bytes: key})
+		if closeErr := closeFunc(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			return fmt.Errorf("failed to write private key: %v", err)
 		}
 	}
 

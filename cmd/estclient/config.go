@@ -107,6 +107,7 @@ const (
 )
 
 var (
+	errNoHSMKeyID   = errors.New("no HSM key ID provided")
 	errNoPrivateKey = errors.New("no private key provided")
 	errNoServer     = errors.New("EST server not specified")
 )
@@ -124,6 +125,13 @@ func (cfg *config) Close() (err error) {
 func (cfg *config) FlagWasPassed(name string) bool {
 	_, ok := cfg.flags[name]
 	return ok
+}
+
+// FlagIsTrue reports whether a boolean flag was set to true at the command
+// line.
+func (cfg *config) FlagIsTrue(name string) bool {
+	v, err := strconv.ParseBool(cfg.flags[name])
+	return err == nil && v
 }
 
 // FlagValue returns the raw (string) value of a flag, or the empty string if
@@ -301,6 +309,11 @@ func (k *hsmKey) Get(baseDir string) (key interface{}, closeFunc func() error, e
 			closeFunc = nil
 		}
 	}()
+
+	if k.KeyID == nil {
+		err = errNoHSMKeyID
+		return
+	}
 
 	// Get the HSM PIN from the terminal if one was not specified in the
 	// config file.
