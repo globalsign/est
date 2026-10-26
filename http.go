@@ -70,6 +70,7 @@ func ordinal(n int) string {
 	return retval
 }
 
+// decodeMultipartRequest decodes base64 multipart data into the supplied parts.
 func decodeMultipartRequest(r *http.Request, parts []multipartPart) (int, error) {
 	mediaType, params, err := mime.ParseMediaType(r.Header.Get(contentTypeHeader))
 	if err != nil {
@@ -89,18 +90,23 @@ func decodeMultipartRequest(r *http.Request, parts []multipartPart) (int, error)
 	mpr := multipart.NewReader(r.Body, params[mimeParamBoundary])
 
 	for i, part := range parts {
-		p, err := mpr.NextPart()
+		p, err := mpr.NextRawPart()
 		if err == io.EOF {
 			return 0, &estError{
 				status: http.StatusBadRequest,
 				desc:   fmt.Sprintf("expected %d parts in request body, got %d", len(parts), i),
 			}
 		} else if err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				return 0, errBodyTooLarge
+			}
+
 			return 0, errBodyParse
 		}
 		defer p.Close()
 
-		if err := verifyPartType(p, part.contentType, encodingTypeBase64, ordinal(i)); err != nil {
+		if err := verifyPartType(p, part.contentType, ordinal(i+1)); err != nil {
 			return 0, err
 		}
 
@@ -214,21 +220,14 @@ func parseHTTPTime(s string) (time.Time, error) {
 	return time.Time{}, errors.New("failed to parse time")
 }
 
-// verifyPartType checks if the content-type and content-transfer-encoding of
-// a multipart-part is as expected.
-func verifyPartType(part *multipart.Part, ct, ce, pos string) error {
+// verifyPartType checks if the content-type of a multipart-part is as
+// expected.
+func verifyPartType(part *multipart.Part, ct, pos string) error {
 	ctype, _, err := mime.ParseMediaType(part.Header.Get(contentTypeHeader))
 	if err != nil || !strings.HasPrefix(ctype, ct) {
 		return &estError{
 			status: http.StatusUnsupportedMediaType,
 			desc:   fmt.Sprintf("%s of %s part must be %s", contentTypeHeader, pos, ct),
-		}
-	}
-
-	if part.Header.Get(transferEncodingHeader) != ce {
-		return &estError{
-			status: http.StatusUnsupportedMediaType,
-			desc:   fmt.Sprintf("%s of %s part must be %s", transferEncodingHeader, pos, ce),
 		}
 	}
 

@@ -757,6 +757,7 @@ func TestTPMEnroll(t *testing.T) {
 	}
 }
 
+// TestServerErrors checks the HTTP status and response body for invalid requests.
 func TestServerErrors(t *testing.T) {
 	t.Parallel()
 
@@ -864,6 +865,75 @@ func TestServerErrors(t *testing.T) {
 			errText: "500 internal server error\n",
 		},
 		{
+			name:   "Enroll/BodyTooLarge",
+			path:   enrollEndpoint,
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{mimeTypePKCS10},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body:    bytes.Repeat([]byte("A"), 1<<17),
+			status:  http.StatusRequestEntityTooLarge,
+			errText: "413 request body too large\n",
+		},
+		{
+			name:   "TPMEnroll/HeaderTooLarge",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte("--parts\r\nContent-Type: application/pkcs10\r\nX-Padding: " +
+				strings.Repeat("A", 1<<17) + "\r\n\r\nAAAA\r\n--parts--\r\n"),
+			status:  http.StatusRequestEntityTooLarge,
+			errText: "413 request body too large\n",
+		},
+		{
+			name:   "TPMEnroll/PreambleTooLarge",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte(strings.Repeat("padding\r\n", 1<<14) +
+				"--parts\r\nContent-Type: application/pkcs10\r\n\r\nAAAA\r\n--parts--\r\n"),
+			status:  http.StatusRequestEntityTooLarge,
+			errText: "413 request body too large\n",
+		},
+		{
+			name:   "TPMEnroll/NoTransferEncoding",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte("--parts\r\nContent-Type: application/pkcs10\r\n\r\n" +
+				string(mustMakeBase64CSR(t, "Jane Doe")) +
+				"\r\n--parts\r\nContent-Type: text/plain\r\n\r\nnot a certificate\r\n--parts--\r\n"),
+			status:  http.StatusUnsupportedMediaType,
+			errText: "415 Content-Type of second part must be application/pkcs7-mime\n",
+		},
+		{
+			name:   "TPMEnroll/WrongPartType",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body:    []byte("--parts\r\nContent-Type: text/plain\r\n\r\nnot a CSR\r\n--parts--\r\n"),
+			status:  http.StatusUnsupportedMediaType,
+			errText: "415 Content-Type of first part must be application/pkcs10\n",
+		},
+		{
 			name:   "HealthCheck/NoAuth",
 			path:   "/healthcheck",
 			method: http.MethodGet,
@@ -936,6 +1006,70 @@ func TestServerErrors(t *testing.T) {
 
 			if got := string(data); got != tc.errText {
 				t.Fatalf("got error text %q, want %q", got, tc.errText)
+			}
+		})
+	}
+}
+
+func TestAllowedHosts(t *testing.T) {
+	t.Parallel()
+
+	var testcases = []struct {
+		name    string
+		allowed string
+		host    string
+		status  int
+	}{
+		{
+			name:    "IPv6WithBrackets",
+			allowed: "[::1]",
+			host:    "[::1]:8443",
+			status:  http.StatusOK,
+		},
+		{
+			name:    "IPv6WithoutBrackets",
+			allowed: "::1",
+			host:    "[::1]:8443",
+			status:  http.StatusOK,
+		},
+		{
+			name:    "IPv6WithoutPort",
+			allowed: "[::1]",
+			host:    "[::1]",
+			status:  http.StatusOK,
+		},
+		{
+			name:    "NotAllowed",
+			allowed: "localhost",
+			host:    "[::1]:8443",
+			status:  http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r, err := est.NewRouter(&est.ServerConfig{
+				AllowedHosts: []string{tc.allowed},
+				CheckBasicAuth: func(context.Context, *http.Request, string, string, string) error {
+					return nil
+				},
+			})
+			if err != nil {
+				t.Fatalf("failed to create new router: %v", err)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
+			req.Host = tc.host
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != tc.status {
+				t.Fatalf("got status code %d, want %d", w.Code, tc.status)
 			}
 		})
 	}
