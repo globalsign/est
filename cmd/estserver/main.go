@@ -138,7 +138,9 @@ func main() {
 			clientCACerts = append(clientCACerts, certs...)
 		}
 
-		listenAddr = cfg.TLS.ListenAddr
+		if cfg.TLS.ListenAddr != "" {
+			listenAddr = cfg.TLS.ListenAddr
+		}
 	} else {
 		serverKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
@@ -235,7 +237,6 @@ func main() {
 
 	// Create and start server.
 	s := &http.Server{
-		Addr:      listenAddr,
 		Handler:   r,
 		TLSConfig: tlsCfg,
 	}
@@ -243,9 +244,18 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGHUP)
 
+	ln, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
 	logger.Infof("Starting EST server FOR NON-PRODUCTION USE ONLY")
 
-	go s.ListenAndServeTLS("", "")
+	go func() {
+		if err := s.ServeTLS(ln, "", ""); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("failed to serve: %v", err)
+		}
+	}()
 
 	// Wait for signal.
 	got := <-stop
