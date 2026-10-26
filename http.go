@@ -91,7 +91,10 @@ func decodeMultipartRequest(r *http.Request, parts []multipartPart) (int, error)
 	for i, part := range parts {
 		p, err := mpr.NextPart()
 		if err == io.EOF {
-			break
+			return 0, &estError{
+				status: http.StatusBadRequest,
+				desc:   fmt.Sprintf("expected %d parts in request body, got %d", len(parts), i),
+			}
 		} else if err != nil {
 			return 0, errBodyParse
 		}

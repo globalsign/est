@@ -502,6 +502,50 @@ func TestReenroll(t *testing.T) {
 	}
 }
 
+// panicCA is a CA which panics when asked for its CA certificates.
+type panicCA struct {
+	est.CA
+}
+
+func (panicCA) CACerts(context.Context, string, *http.Request) ([]*x509.Certificate, error) {
+	panic("test panic")
+}
+
+func TestServerRecoversFromPanic(t *testing.T) {
+	t.Parallel()
+
+	r, err := est.NewRouter(&est.ServerConfig{CA: panicCA{}})
+	if err != nil {
+		t.Fatalf("failed to create new router: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, cacertsEndpoint, nil))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got status code %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestReenrollWithoutTLS(t *testing.T) {
+	t.Parallel()
+
+	r, err := est.NewRouter(&est.ServerConfig{CA: panicCA{}})
+	if err != nil {
+		t.Fatalf("failed to create new router: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, reenrollEndpoint, bytes.NewReader(mustMakeBase64CSR(t, "Jane Doe")))
+	req.Header.Set(typeHeader, mimeTypePKCS10)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("got status code %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
 func TestServerKeyGen(t *testing.T) {
 	t.Parallel()
 
@@ -840,6 +884,20 @@ func TestServerErrors(t *testing.T) {
 			},
 			status:  http.StatusBadRequest,
 			errText: "400 host not allowed\n",
+		},
+		{
+			name:   "TPMEnroll/MissingParts",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte("--parts\r\nContent-Type: application/pkcs10\r\nContent-Transfer-Encoding: base64\r\n\r\n" +
+				string(mustMakeBase64CSR(t, "Jane Doe")) + "\r\n--parts--\r\n"),
+			status:  http.StatusBadRequest,
+			errText: "400 expected 4 parts in request body, got 1\n",
 		},
 	}
 
