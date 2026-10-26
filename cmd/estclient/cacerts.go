@@ -43,7 +43,7 @@ func cacerts(w io.Writer, set *flag.FlagSet) error {
 
 	// make sure adequate set of filtering flags was passed
 	numberOfFilterFlagsSet := 0
-	filterFlags := []bool{cfg.FlagWasPassed(rootsOnlyFlag), cfg.FlagWasPassed(intermediatesOnlyFlag), cfg.FlagWasPassed(rootOutFlag)}
+	filterFlags := []bool{cfg.FlagIsTrue(rootsOnlyFlag), cfg.FlagIsTrue(intermediatesOnlyFlag), cfg.FlagIsTrue(rootOutFlag)}
 	for _, flag := range filterFlags {
 		if flag {
 			numberOfFilterFlagsSet++
@@ -73,7 +73,7 @@ func cacerts(w io.Writer, set *flag.FlagSet) error {
 		for _, cert := range certs {
 			if bytes.Equal(cert.RawSubject, cert.RawIssuer) && cert.CheckSignatureFrom(cert) == nil {
 				roots = append(roots, cert)
-				if cfg.FlagWasPassed(rootOutFlag) {
+				if cfg.FlagIsTrue(rootOutFlag) {
 					break
 				}
 			} else {
@@ -81,18 +81,18 @@ func cacerts(w io.Writer, set *flag.FlagSet) error {
 			}
 		}
 
-		if cfg.FlagWasPassed(rootsOnlyFlag) || cfg.FlagWasPassed(rootOutFlag) {
+		if cfg.FlagIsTrue(rootsOnlyFlag) || cfg.FlagIsTrue(rootOutFlag) {
 			certs = roots
-		} else if cfg.FlagWasPassed(intermediatesOnlyFlag) {
+		} else if cfg.FlagIsTrue(intermediatesOnlyFlag) {
 			certs = intermediates
 		}
 	}
 
-	if cfg.FlagWasPassed(rootOutFlag) && len(certs) == 0 {
+	if cfg.FlagIsTrue(rootOutFlag) && len(certs) == 0 {
 		return errors.New("failed to find a root certificate in CA certificates")
 	}
 
-	if cfg.FlagWasPassed(separateOutFlag) {
+	if cfg.FlagIsTrue(separateOutFlag) {
 		var prefix string
 		if prefix = cfg.FlagValue(outFlag); len(prefix) > 0 {
 			prefix = strings.TrimSuffix(prefix, ".pem") + "-"
