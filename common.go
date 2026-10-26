@@ -69,7 +69,8 @@ const (
 
 // Other variables.
 var (
-	oidSubjectAltName = asn1.ObjectIdentifier{2, 5, 29, 17}
+	oidSubjectAltName   = asn1.ObjectIdentifier{2, 5, 29, 17}
+	oidExtensionRequest = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 9, 14}
 )
 
 // consumeAndClose discards any remaining data in the io.ReadCloser and then

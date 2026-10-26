@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -504,9 +505,19 @@ func (c *Client) addChallengePassword(csr []byte, challengePassword string) ([]b
 		return nil, err
 	}
 
+	// Rebuild extensionRequest from Extensions to preserve critical values.
 	cr := x509util.CertificateRequest{
-		CertificateRequest: *stdCsr,
-		ChallengePassword:  challengePassword,
+		CertificateRequest: x509.CertificateRequest{
+			RawSubject:         stdCsr.RawSubject,
+			ExtraExtensions:    stdCsr.Extensions,
+			SignatureAlgorithm: stdCsr.SignatureAlgorithm,
+		},
+		ChallengePassword: challengePassword,
+	}
+	for _, attr := range stdCsr.Attributes {
+		if !attr.Type.Equal(oidExtensionRequest) {
+			cr.Attributes = append(cr.Attributes, attr)
+		}
 	}
 	crBs, err := x509util.CreateCertificateRequest(rand.Reader, &cr, c.SigningKey)
 	return crBs, err
@@ -633,7 +644,7 @@ func (c *Client) makeHTTPClient() (*http.Client, string, error) {
 
 	var tlsUnique64 string
 	if tlsu := conn.ConnectionState().TLSUnique; tlsu != nil {
-		tlsUnique64 = string(base64Encode(tlsu))
+		tlsUnique64 = base64.StdEncoding.EncodeToString(tlsu)
 	} else {
 		tlsUnique64 = ""
 	}
