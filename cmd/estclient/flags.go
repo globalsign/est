@@ -23,6 +23,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/globalsign/est"
 )
 
 // option represents a command line option, and is used both for creating a
@@ -50,7 +52,6 @@ const (
 	appName        = "estclient"
 	defaultTimeout = time.Second * 15
 	sepChar        = ","
-	versionString  = "1.0.6"
 )
 
 // Flag name constants.
@@ -391,7 +392,7 @@ func usageError(w io.Writer, line int) {
 
 // version outputs version information.
 func version(w io.Writer, set *flag.FlagSet) error {
-	fmt.Fprintf(w, "GlobalSign EST Client %s\n", versionString)
+	fmt.Fprintf(w, "GlobalSign EST Client %s\n", est.Version())
 	return nil
 }
 

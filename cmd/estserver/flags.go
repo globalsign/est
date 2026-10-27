@@ -18,12 +18,13 @@ package main
 import (
 	"flag"
 	"fmt"
+
+	"github.com/globalsign/est"
 )
 
 // Global constants.
 const (
-	appName       = "estserver"
-	versionString = "1.0.6"
+	appName = "estserver"
 )
 
 // Flag name constants.
@@ -63,5 +64,5 @@ func usage() {
 
 // version outputs version information.
 func version() {
-	fmt.Printf("GlobalSign EST Server %s\n", versionString)
+	fmt.Printf("GlobalSign EST Server %s\n", est.Version())
 }
