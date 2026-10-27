@@ -38,6 +38,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -147,6 +148,69 @@ func TestCSRAttrs(t *testing.T) {
 				t.Fatalf("got %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestClientContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	// The listener never accepts, so the TLS handshake never completes.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	client := est.Client{Host: ln.Addr().String(), InsecureSkipVerify: true}
+
+	errc := make(chan error, 1)
+	go func() {
+		_, err := client.CACerts(ctx)
+		errc <- err
+	}()
+
+	select {
+	case err := <-errc:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("got error %v, want %v", err, context.DeadlineExceeded)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("CACerts did not return after the context deadline")
+	}
+}
+
+func TestClientClosesConnections(t *testing.T) {
+	t.Parallel()
+
+	var open int64
+	s := httptest.NewUnstartedServer(http.NotFoundHandler())
+	s.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		switch state {
+		case http.StateNew:
+			atomic.AddInt64(&open, 1)
+		case http.StateClosed:
+			atomic.AddInt64(&open, -1)
+		}
+	}
+	s.StartTLS()
+	defer s.Close()
+
+	client := est.Client{Host: strings.TrimPrefix(s.URL, "https://"), InsecureSkipVerify: true}
+	for i := 0; i < 3; i++ {
+		if _, err := client.CACerts(context.Background()); err == nil {
+			t.Fatal("CACerts unexpectedly succeeded")
+		}
+	}
+
+	deadline := time.Now().Add(testTimeout)
+	for atomic.LoadInt64(&open) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d connections still open", atomic.LoadInt64(&open))
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -438,6 +502,50 @@ func TestReenroll(t *testing.T) {
 	}
 }
 
+// panicCA is a CA which panics when asked for its CA certificates.
+type panicCA struct {
+	est.CA
+}
+
+func (panicCA) CACerts(context.Context, string, *http.Request) ([]*x509.Certificate, error) {
+	panic("test panic")
+}
+
+func TestServerRecoversFromPanic(t *testing.T) {
+	t.Parallel()
+
+	r, err := est.NewRouter(&est.ServerConfig{CA: panicCA{}})
+	if err != nil {
+		t.Fatalf("failed to create new router: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, cacertsEndpoint, nil))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("got status code %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestReenrollWithoutTLS(t *testing.T) {
+	t.Parallel()
+
+	r, err := est.NewRouter(&est.ServerConfig{CA: panicCA{}})
+	if err != nil {
+		t.Fatalf("failed to create new router: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, reenrollEndpoint, bytes.NewReader(mustMakeBase64CSR(t, "Jane Doe")))
+	req.Header.Set(typeHeader, mimeTypePKCS10)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("got status code %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
 func TestServerKeyGen(t *testing.T) {
 	t.Parallel()
 
@@ -714,6 +822,7 @@ func TestTrustProxyHeaders(t *testing.T) {
 	}
 }
 
+// TestServerErrors checks the HTTP status and response body for invalid requests.
 func TestServerErrors(t *testing.T) {
 	t.Parallel()
 
@@ -821,6 +930,75 @@ func TestServerErrors(t *testing.T) {
 			errText: "500 internal server error\n",
 		},
 		{
+			name:   "Enroll/BodyTooLarge",
+			path:   enrollEndpoint,
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{mimeTypePKCS10},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body:    bytes.Repeat([]byte("A"), 1<<17),
+			status:  http.StatusRequestEntityTooLarge,
+			errText: "413 request body too large\n",
+		},
+		{
+			name:   "TPMEnroll/HeaderTooLarge",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte("--parts\r\nContent-Type: application/pkcs10\r\nX-Padding: " +
+				strings.Repeat("A", 1<<17) + "\r\n\r\nAAAA\r\n--parts--\r\n"),
+			status:  http.StatusRequestEntityTooLarge,
+			errText: "413 request body too large\n",
+		},
+		{
+			name:   "TPMEnroll/PreambleTooLarge",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte(strings.Repeat("padding\r\n", 1<<14) +
+				"--parts\r\nContent-Type: application/pkcs10\r\n\r\nAAAA\r\n--parts--\r\n"),
+			status:  http.StatusRequestEntityTooLarge,
+			errText: "413 request body too large\n",
+		},
+		{
+			name:   "TPMEnroll/NoTransferEncoding",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte("--parts\r\nContent-Type: application/pkcs10\r\n\r\n" +
+				string(mustMakeBase64CSR(t, "Jane Doe")) +
+				"\r\n--parts\r\nContent-Type: text/plain\r\n\r\nnot a certificate\r\n--parts--\r\n"),
+			status:  http.StatusUnsupportedMediaType,
+			errText: "415 Content-Type of second part must be application/pkcs7-mime\n",
+		},
+		{
+			name:   "TPMEnroll/WrongPartType",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body:    []byte("--parts\r\nContent-Type: text/plain\r\n\r\nnot a CSR\r\n--parts--\r\n"),
+			status:  http.StatusUnsupportedMediaType,
+			errText: "415 Content-Type of first part must be application/pkcs10\n",
+		},
+		{
 			name:   "HealthCheck/NoAuth",
 			path:   "/healthcheck",
 			method: http.MethodGet,
@@ -841,6 +1019,20 @@ func TestServerErrors(t *testing.T) {
 			},
 			status:  http.StatusBadRequest,
 			errText: "400 host not allowed\n",
+		},
+		{
+			name:   "TPMEnroll/MissingParts",
+			path:   "/.well-known/est/tpmenroll",
+			method: http.MethodPost,
+			headers: http.Header{
+				typeHeader:          []string{"multipart/mixed; boundary=parts"},
+				authorizationHeader: []string{authorizationValue},
+				hostHeader:          []string{testDomain},
+			},
+			body: []byte("--parts\r\nContent-Type: application/pkcs10\r\nContent-Transfer-Encoding: base64\r\n\r\n" +
+				string(mustMakeBase64CSR(t, "Jane Doe")) + "\r\n--parts--\r\n"),
+			status:  http.StatusBadRequest,
+			errText: "400 expected 4 parts in request body, got 1\n",
 		},
 	}
 
@@ -879,6 +1071,70 @@ func TestServerErrors(t *testing.T) {
 
 			if got := string(data); got != tc.errText {
 				t.Fatalf("got error text %q, want %q", got, tc.errText)
+			}
+		})
+	}
+}
+
+func TestAllowedHosts(t *testing.T) {
+	t.Parallel()
+
+	var testcases = []struct {
+		name    string
+		allowed string
+		host    string
+		status  int
+	}{
+		{
+			name:    "IPv6WithBrackets",
+			allowed: "[::1]",
+			host:    "[::1]:8443",
+			status:  http.StatusOK,
+		},
+		{
+			name:    "IPv6WithoutBrackets",
+			allowed: "::1",
+			host:    "[::1]:8443",
+			status:  http.StatusOK,
+		},
+		{
+			name:    "IPv6WithoutPort",
+			allowed: "[::1]",
+			host:    "[::1]",
+			status:  http.StatusOK,
+		},
+		{
+			name:    "NotAllowed",
+			allowed: "localhost",
+			host:    "[::1]:8443",
+			status:  http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			r, err := est.NewRouter(&est.ServerConfig{
+				AllowedHosts: []string{tc.allowed},
+				CheckBasicAuth: func(context.Context, *http.Request, string, string, string) error {
+					return nil
+				},
+			})
+			if err != nil {
+				t.Fatalf("failed to create new router: %v", err)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
+			req.Host = tc.host
+
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+
+			if w.Code != tc.status {
+				t.Fatalf("got status code %d, want %d", w.Code, tc.status)
 			}
 		})
 	}

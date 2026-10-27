@@ -315,7 +315,7 @@ func enroll(w http.ResponseWriter, r *http.Request) {
 		// This server does not support clients which do not support TLS client
 		// authentication for renew operations.
 
-		if len(r.TLS.PeerCertificates) == 0 {
+		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 			errNoClientCertificate.Write(w)
 			return
 		}
@@ -589,6 +589,8 @@ func recoverer(logger Logger) func(next http.Handler) http.Handler {
 						"Panic Value", rcv,
 						"Stack Trace", string(debug.Stack()),
 					)
+
+					errInternal.Write(w)
 				}
 			}()
 
@@ -645,10 +647,12 @@ func verifyAllowedHosts(allowed []string) func(next http.Handler) http.Handler {
 			if host, _, err := net.SplitHostPort(reqHost); err == nil {
 				reqHost = host
 			}
+			reqHost = strings.Trim(reqHost, "[]")
 
 			goodHost := false
 			for _, host := range allowed {
-				if strings.EqualFold(host, reqHost) {
+				// IPv6 addresses may be listed with or without brackets.
+				if strings.EqualFold(strings.Trim(host, "[]"), reqHost) {
 					goodHost = true
 					break
 				}

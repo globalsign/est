@@ -124,10 +124,11 @@ func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
 		return nil, err
 	}
 
-	httpc, _, err := c.makeHTTPClient()
+	httpc, conn, err := c.makeHTTPClient(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
 
 	resp, err := httpc.Do(req)
 	if err != nil {
@@ -153,10 +154,11 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		return CSRAttrs{}, err
 	}
 
-	httpc, _, err := c.makeHTTPClient()
+	httpc, conn, err := c.makeHTTPClient(ctx)
 	if err != nil {
 		return CSRAttrs{}, err
 	}
+	defer conn.Close()
 
 	resp, err := httpc.Do(req)
 	if err != nil {
@@ -205,14 +207,18 @@ func (c *Client) enrollCommon(ctx context.Context, r *x509.CertificateRequest, r
 		endpoint = reenrollEndpoint
 	}
 
-	httpc, tlsUnique64, err := c.makeHTTPClient()
+	httpc, conn, err := c.makeHTTPClient(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
 
+	// RFC 7030 section 3.5 recommends including the tls-unique value in the
+	// CSR challenge password. It is not available with TLS 1.3.
+	// See https://pkg.go.dev/crypto/tls#ConnectionState.TLSUnique.
 	crBs := r.Raw
-	if tlsUnique64 != "" && c.SigningKey != nil {
-		crBs, err = c.addChallengePassword(r.Raw, tlsUnique64)
+	if tlsu := conn.ConnectionState().TLSUnique; tlsu != nil && c.SigningKey != nil {
+		crBs, err = c.addChallengePassword(r.Raw, string(base64Encode(tlsu)))
 		if err != nil {
 			return nil, err
 		}
@@ -251,10 +257,11 @@ func (c *Client) ServerKeyGen(ctx context.Context, r *x509.CertificateRequest) (
 		return nil, nil, err
 	}
 
-	httpc, _, err := c.makeHTTPClient()
+	httpc, conn, err := c.makeHTTPClient(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer conn.Close()
 
 	resp, err := httpc.Do(req)
 	if err != nil {
@@ -382,10 +389,11 @@ func (c *Client) TPMEnroll(
 		return nil, nil, nil, err
 	}
 
-	httpc, _, err := c.makeHTTPClient()
+	httpc, conn, err := c.makeHTTPClient(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	defer conn.Close()
 
 	resp, err := httpc.Do(req)
 	if err != nil {
@@ -584,7 +592,8 @@ func (c *Client) uri(endpoint string) string {
 	var builder strings.Builder
 
 	builder.WriteString("https://")
-	builder.WriteString(c.Host)
+	// IPv6 link-local endpoints must escape % symbol, e.g., fe80::1%eth0
+	builder.WriteString(strings.ReplaceAll(c.Host, "%", "%25"))
 	builder.WriteString(estPathPrefix)
 
 	if c.AdditionalPathSegment != "" {
@@ -598,12 +607,8 @@ func (c *Client) uri(endpoint string) string {
 }
 
 // makeHTTPClient makes and configures an HTTP client for connecting to an
-// EST server. It also returns the corresponding TLS-unique value base64 encoded which could be required by EST server.
-//
-// RFC 7030 - section 3.5 recommends including it in the CSR challenge password field.
-//
-// The value could be nil with respect to TLS version. More details at https://pkg.go.dev/crypto/tls#ConnectionState.TLSUnique
-func (c *Client) makeHTTPClient() (*http.Client, string, error) {
+// EST server. It also returns the TLS connection, which the caller must close.
+func (c *Client) makeHTTPClient(ctx context.Context) (*http.Client, *tls.Conn, error) {
 	var rootCAs *x509.CertPool
 	if c.ExplicitAnchor != nil {
 		rootCAs = c.ExplicitAnchor
@@ -625,17 +630,12 @@ func (c *Client) makeHTTPClient() (*http.Client, string, error) {
 		InsecureSkipVerify: c.InsecureSkipVerify,
 	}
 
-	conn, err := tls.Dial(tcpProtocol, c.Host, tlsClientConfig)
+	dialer := &tls.Dialer{Config: tlsClientConfig}
+	nc, err := dialer.DialContext(ctx, tcpProtocol, c.Host)
 	if err != nil {
-		return nil, "", err
+		return nil, nil, err
 	}
-
-	var tlsUnique64 string
-	if tlsu := conn.ConnectionState().TLSUnique; tlsu != nil {
-		tlsUnique64 = string(base64Encode(tlsu))
-	} else {
-		tlsUnique64 = ""
-	}
+	conn := nc.(*tls.Conn)
 
 	httpc := &http.Client{
 		Transport: &http.Transport{
@@ -646,5 +646,5 @@ func (c *Client) makeHTTPClient() (*http.Client, string, error) {
 		},
 	}
 
-	return httpc, tlsUnique64, nil
+	return httpc, conn, nil
 }
