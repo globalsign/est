@@ -757,6 +757,71 @@ func TestTPMEnroll(t *testing.T) {
 	}
 }
 
+// TestTrustProxyHeaders checks the opt-in and precedence of proxy address headers.
+func TestTrustProxyHeaders(t *testing.T) {
+	t.Parallel()
+
+	var testcases = []struct {
+		name   string
+		trust  bool
+		realIP string
+		want   string
+	}{
+		{
+			name: "Disabled",
+			want: "192.0.2.1:1234",
+		},
+		{
+			name:   "DisabledBothHeaders",
+			realIP: "203.0.113.2",
+			want:   "192.0.2.1:1234",
+		},
+		{
+			name:  "Enabled",
+			trust: true,
+			want:  "203.0.113.1",
+		},
+		{
+			name:   "RealIPPrecedence",
+			trust:  true,
+			realIP: "203.0.113.2",
+			want:   "203.0.113.2",
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var got string
+			r, err := est.NewRouter(&est.ServerConfig{
+				CheckBasicAuth: func(_ context.Context, r *http.Request, _, _, _ string) error {
+					got = r.RemoteAddr
+					return nil
+				},
+				TrustProxyHeaders: tc.trust,
+			})
+			if err != nil {
+				t.Fatalf("failed to create new router: %v", err)
+			}
+
+			// httptest.NewRequest sets RemoteAddr to 192.0.2.1:1234.
+			req := httptest.NewRequest(http.MethodGet, "/healthcheck", nil)
+			req.Header.Set("X-Forwarded-For", "203.0.113.1")
+			if tc.realIP != "" {
+				req.Header.Set("X-Real-IP", tc.realIP)
+			}
+			r.ServeHTTP(httptest.NewRecorder(), req)
+
+			if got != tc.want {
+				t.Fatalf("got remote address %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestServerErrors checks the HTTP status and response body for invalid requests.
 func TestServerErrors(t *testing.T) {
 	t.Parallel()

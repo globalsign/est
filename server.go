@@ -63,6 +63,12 @@ type ServerConfig struct {
 	// is nil, then HTTP Basic Authentication is not required for any EST
 	// operation, but access to the /healthcheck endpoint will be blocked.
 	CheckBasicAuth func(ctx context.Context, r *http.Request, aps, username, password string) error
+
+	// TrustProxyHeaders sets the request's RemoteAddr from the X-Real-IP or
+	// X-Forwarded-For header. It defaults to false. Enable it only when every
+	// request passes through a trusted proxy that removes or overwrites both
+	// headers. Proxy source addresses are not checked.
+	TrustProxyHeaders bool
 }
 
 // ctxKey is an unexported custom type for request context keys.
@@ -142,7 +148,9 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 
 	r.Use(middleware.Timeout(timeout))
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
+	if cfg.TrustProxyHeaders {
+		r.Use(middleware.RealIP)
+	}
 	r.Use(withLogger(logger))
 	r.Use(recoverer(logger))
 	r.Use(addServerHeader)
