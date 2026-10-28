@@ -87,9 +87,6 @@ function increment-version() {
 
 	while true; do
 		read -p "Increment version [(m)ajor/m(i)nor/(p)atch]? " part
-		if [[ "$part" == "" ]]; then
-			part="M"
-		fi
 		case "$part" in
 			[Mm])
 				major=$((major + 1))
@@ -107,7 +104,7 @@ function increment-version() {
 				break
 			;;
 			*)
-				echo "Enter M to increment major version, I for minor version, or P for patch"
+				log "Error: invalid option '$part'. Enter M for major, I for minor, or P for patch." >&2
 			;;
 		esac
 	done

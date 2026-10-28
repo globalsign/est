@@ -111,9 +111,9 @@ type Client struct {
 	InsecureSkipVerify bool
 }
 
-// Client constants.
-const (
-	estVersion = "v1.0.6"
+// Client variables for version information.
+var (
+	estVersion = "v" + Version()
 	userAgent  = "GlobalSign EST Client " + estVersion + " github.com/globalsign/est"
 )
 
