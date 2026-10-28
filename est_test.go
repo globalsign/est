@@ -793,6 +793,16 @@ func TestServerErrors(t *testing.T) {
 			errText: "500 internal server error\n",
 		},
 		{
+			name:   "CACerts/AdditionalPathSegmentTooLong",
+			path:   "/.well-known/est/" + strings.Repeat("a", 256) + "/cacerts",
+			method: http.MethodGet,
+			headers: http.Header{
+				hostHeader: []string{testDomain},
+			},
+			status:  http.StatusRequestURITooLong,
+			errText: "414 additional path segment too long\n",
+		},
+		{
 			name:   "CSRAttrs/TriggeredError",
 			path:   "/.well-known/est/triggererrors/csrattrs",
 			method: http.MethodGet,

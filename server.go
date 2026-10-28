@@ -80,6 +80,7 @@ const (
 const (
 	apsParamName   = "additionalPathSegment"
 	defaultTimeout = time.Second * 60
+	maxAPSLength   = 255
 )
 
 // Log field and message constants.
@@ -196,6 +197,8 @@ func NewRouter(cfg *ServerConfig) (http.Handler, error) {
 
 		// Endpoints with additional path segment.
 		r.Route(fmt.Sprintf("/{%s}", apsParamName), func(r chi.Router) {
+			r.Use(limitAPSLength)
+
 			r.Get(cacertsEndpoint, cacerts)
 			r.Get(csrattrsEndpoint, csrattrs)
 
@@ -674,6 +677,19 @@ func rateLimit(limit int) func(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// limitAPSLength is middleware which refuses requests with an additional path
+// segment longer than maxAPSLength. The segment keys the CA certificates
+// cache, so its length must be bounded.
+func limitAPSLength(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(chi.URLParam(r, apsParamName)) > maxAPSLength {
+			errAPSTooLong.Write(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // maxBodySize is middleware which wraps the http.Request.Body with an

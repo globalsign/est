@@ -46,6 +46,11 @@ const (
 	// be assumed to be fresh, i.e. a new call to /cacerts will not be made if
 	// the cached CA certs are younger than this time period.
 	assumeFresh = time.Minute * 5
+
+	// maxCacheEntries is the maximum number of CAs for which CA certificates
+	// are cached. Any client can add an entry for each additional path
+	// segment through /cacerts, so the cache must not grow without limit.
+	maxCacheEntries = 1024
 )
 
 // Add adds a set of CA certificates to the cache. The operation is performed
@@ -130,6 +135,15 @@ func (c *cacertCache) addSync(aps string, certs []*x509.Certificate) cacheEntry 
 		roots:   roots,
 		inters:  inters,
 		updated: time.Now(),
+	}
+
+	// Remove an arbitrary entry to make room if the cache is full. A removed
+	// entry is retrieved again when it is next needed.
+	if !ok && len(c.cache) >= maxCacheEntries {
+		for k := range c.cache {
+			delete(c.cache, k)
+			break
+		}
 	}
 
 	c.cache[aps] = newEntry
