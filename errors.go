@@ -29,6 +29,10 @@ type estError struct {
 
 // Internal error values.
 var (
+	errAPSTooLong = &estError{
+		status: http.StatusRequestURITooLong,
+		desc:   "additional path segment too long",
+	}
 	errAuthRequired = &estError{
 		status: http.StatusUnauthorized,
 		desc:   "authorization required",
