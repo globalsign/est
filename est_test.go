@@ -182,6 +182,64 @@ func TestClientContextDeadline(t *testing.T) {
 	}
 }
 
+func TestClientResponseSizeLimit(t *testing.T) {
+	t.Parallel()
+
+	certs, err := altCA.CACerts(context.Background(), "", nil)
+	if err != nil {
+		t.Fatalf("failed to get CA certificates: %v", err)
+	}
+
+	p7, err := pkcs7.DegenerateCertificate(certs[0].Raw)
+	if err != nil {
+		t.Fatalf("failed to create PKCS7 structure: %v", err)
+	}
+
+	var testcases = []struct {
+		name    string
+		padding int
+		wantErr bool
+	}{
+		{
+			name: "WithinLimit",
+		},
+		{
+			name:    "OverLimit",
+			padding: 1 << 20,
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Base64 decoding ignores line breaks, so the padding only makes
+			// the response larger.
+			body := base64.StdEncoding.EncodeToString(p7) + strings.Repeat("\r\n", tc.padding)
+
+			s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set(typeHeader, "application/pkcs7-mime; smime-type=certs-only")
+				w.Header().Set(encodingHeader, encodingBase64)
+				w.Write([]byte(body))
+			}))
+			defer s.Close()
+
+			client := est.Client{Host: strings.TrimPrefix(s.URL, "https://"), InsecureSkipVerify: true}
+
+			ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+			defer cancel()
+
+			_, err := client.CACerts(ctx)
+			if gotErr := err != nil; gotErr != tc.wantErr {
+				t.Fatalf("got error %v, want error %t", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestClientClosesConnections(t *testing.T) {
 	t.Parallel()
 
