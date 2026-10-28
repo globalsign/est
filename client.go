@@ -644,6 +644,12 @@ func (c *Client) makeHTTPClient(ctx context.Context) (*http.Client, *tls.Conn, e
 			},
 			DisableKeepAlives: c.DisableKeepAlives,
 		},
+		// Return redirect responses instead of following them, so that
+		// credentials are not resent to another location, possibly over
+		// plain HTTP.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	return httpc, conn, nil
