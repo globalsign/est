@@ -151,6 +151,25 @@ func TestCSRAttrs(t *testing.T) {
 	}
 }
 
+func TestCSRAttrsTruncatedError(t *testing.T) {
+	t.Parallel()
+
+	// The body is shorter than the declared length, so reading it fails.
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(typeHeader, mimeTypeText)
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("truncated"))
+	}))
+	defer s.Close()
+
+	client := est.Client{Host: strings.TrimPrefix(s.URL, "https://"), InsecureSkipVerify: true}
+
+	if _, err := client.CSRAttrs(context.Background()); err == nil {
+		t.Fatal("CSRAttrs unexpectedly succeeded")
+	}
+}
+
 func TestClientContextDeadline(t *testing.T) {
 	t.Parallel()
 
