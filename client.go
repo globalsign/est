@@ -175,8 +175,8 @@ func (c *Client) CSRAttrs(ctx context.Context) (CSRAttrs, error) {
 		// treat these two response codes as errors, and we just return an
 		// empty CSR attributes object.
 		var estErr Error
-		if errors.As(err, &estErr); estErr.StatusCode() == http.StatusNotFound ||
-			estErr.StatusCode() == http.StatusNoContent {
+		if errors.As(err, &estErr) && (estErr.StatusCode() == http.StatusNotFound ||
+			estErr.StatusCode() == http.StatusNoContent) {
 			return CSRAttrs{}, nil
 		}
 
