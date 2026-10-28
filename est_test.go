@@ -214,6 +214,40 @@ func TestClientClosesConnections(t *testing.T) {
 	}
 }
 
+func TestClientRefusesRedirects(t *testing.T) {
+	t.Parallel()
+
+	// The plain HTTP server counts the requests that reach it.
+	var redirected int64
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&redirected, 1)
+	}))
+	defer plain.Close()
+
+	s := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+r.URL.Path, http.StatusMovedPermanently)
+	}))
+	defer s.Close()
+
+	client := est.Client{
+		Host:               strings.TrimPrefix(s.URL, "https://"),
+		InsecureSkipVerify: true,
+		Username:           "testuser",
+		Password:           "xyzzy",
+	}
+
+	_, err := client.CACerts(context.Background())
+
+	var estErr est.Error
+	if !errors.As(err, &estErr) || estErr.StatusCode() != http.StatusMovedPermanently {
+		t.Fatalf("got error %v, want status %d", err, http.StatusMovedPermanently)
+	}
+
+	if n := atomic.LoadInt64(&redirected); n != 0 {
+		t.Fatalf("redirect target received %d requests", n)
+	}
+}
+
 func TestEnroll(t *testing.T) {
 	t.Parallel()
 
