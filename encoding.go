@@ -33,6 +33,10 @@ import (
 
 const (
 	base64LineLength = 76
+
+	// maxResponseSize is the maximum size in bytes of a response body, or of
+	// a part of a multipart response, that the client reads.
+	maxResponseSize = 1 << 20
 )
 
 // base64Encode base64-encodes a slice of bytes using standard encoding.
@@ -72,10 +76,27 @@ func decodePKCS7CertsOnly(b []byte) ([]*x509.Certificate, error) {
 	return p7.Certificates, nil
 }
 
+// readAllResponse reads all data from a reader, up to maxResponseSize bytes.
+// The limit stops a server from exhausting the client's memory or crashing it
+// with deeply nested PKCS#7 data. It returns a normal error and is intended to
+// be used from client code.
+func readAllResponse(r io.Reader) ([]byte, error) {
+	b, err := ioutil.ReadAll(io.LimitReader(r, maxResponseSize+1))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(b) > maxResponseSize {
+		return nil, fmt.Errorf("response larger than %d bytes", maxResponseSize)
+	}
+
+	return b, nil
+}
+
 // readAllBase64Response reads all data from a reader and base64-decodes it.
 // It returns a normal error and is intended to be used from client code.
 func readAllBase64Response(r io.Reader) ([]byte, error) {
-	b, err := ioutil.ReadAll(r)
+	b, err := readAllResponse(r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read HTTP response body: %w", err)
 	}

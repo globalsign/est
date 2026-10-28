@@ -545,7 +545,7 @@ func checkResponseError(r *http.Response) error {
 	if err == nil || r.Header.Get(contentTypeHeader) == "" {
 		switch mediaType {
 		case "", mimeTypeTextPlain, mimeTypeJSON, mimeTypeProblemJSON:
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := readAllResponse(r.Body)
 			if err != nil {
 				return err
 			}
