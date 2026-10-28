@@ -97,15 +97,13 @@ func (c *cacertCache) addSync(aps string, certs []*x509.Certificate) cacheEntry 
 	}
 
 	// Build new certificate pools before acquiring the mutex, to minimize
-	// time holding it.
-	var roots *x509.CertPool
+	// time holding it. The roots pool is never nil, because a nil pool makes
+	// x509.Certificate.Verify use the system roots.
+	roots := x509.NewCertPool()
 	var inters *x509.CertPool
 
 	for _, cert := range certs {
 		if bytes.Equal(cert.RawSubject, cert.RawIssuer) {
-			if roots == nil {
-				roots = x509.NewCertPool()
-			}
 			roots.AddCert(cert)
 		} else {
 			if inters == nil {
