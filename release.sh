@@ -67,6 +67,34 @@ function version-gt() {
 	return 1
 }
 
+# Prints the module path declared in go.mod at the given commit, or nothing if
+# there isn't one.
+function module-path() {
+	git show "$1:go.mod" 2>/dev/null \
+		| awk '$1 == "module" { gsub(/"/, "", $2); print $2; exit }'
+}
+
+# Succeeds if module path $1 can be released with major version $2. Go's
+# semantic import versioning requires a "/vN" suffix matching the major
+# version for v2 and above, and no suffix for v0 and v1. Otherwise the tag is
+# published but 'go get' refuses to install it.
+function module-path-matches() {
+	if (( $2 >= 2 )); then
+		[[ "$1" == */v$2 ]]
+	else
+		[[ ! "$1" =~ /v[0-9]+$ ]]
+	fi
+}
+
+# Describes the module path that major version $1 requires, for errors.
+function module-path-requirement() {
+	if (( $1 >= 2 )); then
+		echo "to end in /v$1"
+	else
+		echo "to have no /vN suffix"
+	fi
+}
+
 # Prints the "- " entries under the "# vX.Y.Z" heading for the given version,
 # reading the changelog from stdin.
 function changelog-entries() {
@@ -131,31 +159,37 @@ function prepare-release() {
 		fatal "There are no commits on $base since $old_tag, so there is nothing to release."
 	fi
 
+	local module=$(module-path "$base")
+	if [[ -z "$module" ]]; then
+		fatal "There is no module directive in go.mod on $base."
+	fi
+
+	local version
 	while true; do
 		read -p "Increment version from $old_version [(m)ajor/m(i)nor/(p)atch]? " part
 		case "$part" in
 			[Mm])
-				major=$((major + 1))
-				minor=0
-				patch=0
-				break
+				version="$((major + 1)).0.0"
 			;;
 			[Ii])
-				minor=$((minor + 1))
-				patch=0
-				break
+				version="$major.$((minor + 1)).0"
 			;;
 			[Pp])
-				patch=$((patch + 1))
-				break
+				version="$major.$minor.$((patch + 1))"
 			;;
 			*)
 				log "Error: invalid option '$part'. Enter M for major, I for minor, or P for patch." >&2
+				continue
 			;;
 		esac
+
+		local new_major="${version%%.*}"
+		if module-path-matches "$module" "$new_major"; then
+			break
+		fi
+		log "Error: Go requires the module path for v$version $(module-path-requirement "$new_major"), but go.mod on $base declares '$module'. Change the module path and imports on $main_branch first, or choose another option." >&2
 	done
 
-	local version="$major.$minor.$patch"
 	local tag="v$version"
 	local branch="release/$tag"
 
@@ -221,6 +255,15 @@ function tag-release() {
 	local old_tag=$(latest-tag "$commit")
 	if [[ -n "$old_tag" ]] && ! version-gt "$version" "${old_tag#v}"; then
 		fatal "$version is not greater than the previous release, $old_tag."
+	fi
+
+	local module=$(module-path "$commit")
+	if [[ -z "$module" ]]; then
+		fatal "There is no module directive in go.mod at $commit."
+	fi
+	local major="${version%%.*}"
+	if ! module-path-matches "$module" "$major"; then
+		fatal "Go requires the module path for $tag $(module-path-requirement "$major"), but go.mod at $commit declares '$module', so 'go get' couldn't install this release."
 	fi
 
 	local changelog
