@@ -18,8 +18,7 @@ package main
 import (
 	"flag"
 	"fmt"
-
-	"github.com/globalsign/est"
+	"runtime/debug"
 )
 
 // Global constants.
@@ -62,7 +61,12 @@ func usage() {
 	fmt.Println()
 }
 
-// version outputs version information.
+// version outputs version information. The Go toolchain records the version
+// from the module's git tag when the binary is built.
 func version() {
-	fmt.Printf("GlobalSign EST Server %s\n", est.Version())
+	v := "(devel)"
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		v = info.Main.Version
+	}
+	fmt.Printf("GlobalSign EST Server %s\n", v)
 }

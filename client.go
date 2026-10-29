@@ -29,6 +29,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -111,11 +112,46 @@ type Client struct {
 	InsecureSkipVerify bool
 }
 
+// modulePath is the import path of this module, used to find its version in
+// the build info.
+const modulePath = "github.com/globalsign/est"
+
 // Client variables for version information.
 var (
-	estVersion = "v" + Version()
-	userAgent  = "GlobalSign EST Client " + estVersion + " github.com/globalsign/est"
+	estVersion = moduleVersion()
+	userAgent  = "GlobalSign EST Client " + estVersion + " " + modulePath
 )
+
+// moduleVersion returns the version of this module that the running binary
+// was built with, e.g. "v1.0.7", as recorded by the Go toolchain from the
+// module's git tag. It returns "(devel)" if the version isn't known, such as
+// in tests or when the module is replaced by a local directory.
+func moduleVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "(devel)"
+	}
+
+	var mod *debug.Module
+	if info.Main.Path == modulePath {
+		mod = &info.Main
+	} else {
+		for _, dep := range info.Deps {
+			if dep.Path == modulePath {
+				mod = dep
+				break
+			}
+		}
+	}
+	if mod != nil && mod.Replace != nil {
+		mod = mod.Replace
+	}
+	if mod == nil || mod.Version == "" {
+		return "(devel)"
+	}
+
+	return mod.Version
+}
 
 // CACerts requests a copy of the current CA certificates.
 func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
