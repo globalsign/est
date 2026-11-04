@@ -176,14 +176,14 @@ enter_repository() {
 	cd "$top"
 }
 
-# The commit must be exactly what gets tagged.
+# The commit must be exactly what gets tagged. Untracked files count too: go
+# build and go test would compile them even though they aren't in the commit.
 check_working_tree() {
-	git update-index -q --refresh
-	if ! git diff --quiet || ! git diff --cached --quiet; then
-		git status --short --untracked-files=no >&2
-		fail "the working tree has staged or unstaged changes; commit or stash them first"
+	if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+		git status --short --untracked-files=all >&2
+		fail "the working tree has staged, unstaged or untracked changes; commit, stash or remove them first"
 	fi
-	ok "working tree has no staged or unstaged changes"
+	ok "working tree has no staged, unstaged or untracked changes"
 }
 
 # The checks against the remote need its current tags and branches.

@@ -90,8 +90,10 @@ first section is the release being tagged.
 
 In order, stopping at the first failure:
 
-- The working tree has no staged or unstaged changes, so what gets tagged is
-  exactly what was tested. Untracked files are allowed.
+- The working tree has no staged, unstaged or untracked changes, so what gets
+  tagged is exactly what was tested. Untracked files count because `go build`
+  and `go test` would compile them even though they aren't in the commit;
+  gitignored files are fine.
 - `origin` can be fetched, so the next checks see its current tags and
   branches. If it can't, this is a warning and they use the last fetched state.
 - No tag `vX.Y.Z` exists.
