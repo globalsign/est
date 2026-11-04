@@ -7,11 +7,11 @@
 # commit, which must already be in the history of master on GitHub. Go modules
 # use the tag as the version, and the binaries and library report the version
 # the Go toolchain records from it, so nothing in the source tree has to be
-# bumped. This script checks that the working tree is clean, CHANGELOG.md has a
-# section for the version, and a clean export of the commit builds and passes
-# its tests, and then, with --apply, creates the tag locally. Without --apply
-# it is a dry run that creates nothing. Pushing the tag is left to you so that
-# you can inspect it first.
+# bumped. This script checks that the working tree is clean and that a clean
+# export of the commit has a CHANGELOG.md section for the version, builds, and
+# passes its tests, and then, with --apply, creates the tag locally. Without
+# --apply it is a dry run that creates nothing. Pushing the tag is left to you
+# so that you can inspect it first.
 #
 #   ./release.sh vX.Y.Z           run the checks only (a dry run)
 #   ./release.sh --apply vX.Y.Z   run the checks, then tag HEAD as vX.Y.Z
@@ -25,6 +25,7 @@ set -euo pipefail
 remote=origin
 branch=master
 
+# Read from the export of HEAD, as is go.mod.
 changelog=CHANGELOG.md
 
 me=$(basename "$0")
@@ -38,13 +39,13 @@ apply=false      # create the tag rather than only run the checks
 tag=""           # the release tag, vX.Y.Z
 version=""       # the bare version, X.Y.Z
 major=""         # its major version, X
+export_dir=""    # a clean export of HEAD, which the checks read
 head=""          # the short hash of HEAD
 prev=""          # the previous release tag reachable from HEAD, if any
 module=""        # the module path declared in go.mod
 release_date=""  # the date of the release's changelog section
 section=""       # the body of the release's changelog section
 entries=0        # the number of entries in it
-export_dir=""    # a clean export of HEAD, where the build and tests run
 
 usage() {
 	cat <<EOF
@@ -99,9 +100,10 @@ version_gt() {
 	return 1
 }
 
-# Prints the module path declared in go.mod, or nothing if there isn't one.
+# Prints the module path declared in the exported go.mod, or nothing if there
+# isn't one.
 module_path() {
-	awk '$1 == "module" { gsub(/"/, "", $2); print $2; exit }' go.mod
+	awk '$1 == "module" { gsub(/"/, "", $2); print $2; exit }' "$export_dir/go.mod"
 }
 
 # Succeeds if module path $1 can be released with major version $2. Go's
@@ -116,8 +118,8 @@ module_path_matches() {
 	fi
 }
 
-# Prints the body of the "## [X.Y.Z]" section of the changelog for version $1,
-# without the heading or surrounding blank lines.
+# Prints the body of the "## [X.Y.Z]" section of the exported changelog for
+# version $1, without the heading or surrounding blank lines.
 changelog_section() {
 	awk -v prefix="## [$1]" '
 		/^## /         { in_section = (substr($0, 1, length(prefix)) == prefix); next }
@@ -130,7 +132,7 @@ changelog_section() {
 			while (n > 0 && lines[n-1] ~ /^[[:space:]]*$/) n--
 			for (i = 0; i < n; i++) print lines[i]
 		}
-	' "$changelog"
+	' "$export_dir/$changelog"
 }
 
 # Parses the command line. Sets $apply, $tag, $version and $major.
@@ -169,7 +171,7 @@ parse_args() {
 	major="${version%%.*}"
 }
 
-# Moves to the top of the repository, where go.mod and the changelog are.
+# Moves to the top of the repository.
 enter_repository() {
 	command -v go >/dev/null || fail "go is not installed"
 	local top
@@ -185,6 +187,17 @@ check_working_tree() {
 		fail "the working tree has staged, unstaged or untracked changes; commit, stash or remove them first"
 	fi
 	ok "working tree has no staged, unstaged or untracked changes"
+}
+
+# Everything from here on reads from a clean export of HEAD rather than the
+# working tree, so that nothing on disk that isn't in the commit, such as a
+# gitignored file or a modification hidden from git status, can affect the
+# checks. Sets $export_dir, which is removed when the script exits.
+export_head() {
+	export_dir=$(mktemp -d)
+	trap 'rm -rf "$export_dir"' EXIT
+	git archive HEAD | tar -x -C "$export_dir" || fail "could not export HEAD"
+	ok "exported HEAD to a clean directory for the checks"
 }
 
 # The checks against the remote need its current tags and branches.
@@ -232,6 +245,7 @@ check_version_order() {
 
 # Sets $module.
 check_module_path() {
+	[[ -f "$export_dir/go.mod" ]] || fail "go.mod is not in HEAD"
 	module=$(module_path)
 	[[ -n "$module" ]] || fail "go.mod has no module directive"
 	if ! module_path_matches "$module" "$major"; then
@@ -247,7 +261,7 @@ check_module_path() {
 # The changelog's first section must be for this release. "Unreleased" is only
 # for the main branch between releases.
 check_changelog() {
-	[[ -f "$changelog" ]] || fail "$changelog does not exist"
+	[[ -f "$export_dir/$changelog" ]] || fail "$changelog is not in HEAD"
 	check_changelog_closed
 	check_changelog_heading
 	check_changelog_entries
@@ -260,10 +274,10 @@ check_changelog() {
 
 # Nothing may be left under Unreleased.
 check_changelog_closed() {
-	if grep -qiE '^##+ +\[?unreleased\]?' "$changelog"; then
+	if grep -qiE '^##+ +\[?unreleased\]?' "$export_dir/$changelog"; then
 		fail "$changelog still has an Unreleased section; rename it to '## [$version] - $(date +%F)'"
 	fi
-	if grep -qiE '^\[unreleased\]:' "$changelog"; then
+	if grep -qiE '^\[unreleased\]:' "$export_dir/$changelog"; then
 		fail "$changelog still has an [Unreleased] link; replace it with one for [$version]"
 	fi
 }
@@ -272,7 +286,7 @@ check_changelog_closed() {
 # $release_date.
 check_changelog_heading() {
 	local heading heading_re
-	heading=$(grep -m 1 -E '^## ' "$changelog" || true)
+	heading=$(grep -m 1 -E '^## ' "$export_dir/$changelog" || true)
 	heading_re="^## \[$(re_escape "$version")\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$"
 	if [[ ! "$heading" =~ $heading_re ]]; then
 		fail "the first section of $changelog is '${heading:-missing}', expected '## [$version] - YYYY-MM-DD'"
@@ -300,7 +314,7 @@ check_changelog_link() {
 	else
 		expected="/releases/tag/$tag"
 	fi
-	link=$(grep -m 1 -E "^\[$(re_escape "$version")\]: " "$changelog" || true)
+	link=$(grep -m 1 -E "^\[$(re_escape "$version")\]: " "$export_dir/$changelog" || true)
 	if [[ -z "$link" ]]; then
 		fail "$changelog has no link for [$version]; add '[$version]: https://$module$expected'"
 	fi
@@ -313,23 +327,13 @@ check_changelog_link() {
 check_changelog_history() {
 	local t missing=""
 	for t in $(git tag --merged HEAD --list 'v*' | { grep -E "^v$version_re\$" || true; }); do
-		if ! grep -qE "^## \[$(re_escape "${t#v}")\]" "$changelog"; then
+		if ! grep -qE "^## \[$(re_escape "${t#v}")\]" "$export_dir/$changelog"; then
 			missing="$missing $t"
 		fi
 	done
 	if [[ -n "$missing" ]]; then
 		fail "$changelog has no section for earlier release(s) reachable from HEAD:$missing"
 	fi
-}
-
-# The build and tests run in a clean export of HEAD, so that nothing in the
-# working tree that isn't in the commit, such as a gitignored file, can affect
-# them. Sets $export_dir, which is removed when the script exits.
-export_head() {
-	export_dir=$(mktemp -d)
-	trap 'rm -rf "$export_dir"' EXIT
-	git archive HEAD | tar -x -C "$export_dir" || fail "could not export HEAD"
-	ok "exported HEAD to a clean directory for the build and tests"
 }
 
 check_build() {
@@ -383,13 +387,13 @@ main() {
 	parse_args "$@"
 	enter_repository
 	check_working_tree
+	export_head
 	fetch_remote
 	check_tag_unused
 	check_head_in_branch
 	check_version_order
 	check_module_path
 	check_changelog
-	export_head
 	check_build
 	check_tests
 	if ! $apply; then

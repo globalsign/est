@@ -94,6 +94,11 @@ In order, stopping at the first failure:
   tagged is exactly what was tested. Untracked files count because `go build`
   and `go test` would compile them even though they aren't in the commit;
   gitignored files are fine.
+- `HEAD` is exported with `git archive` into a temporary directory, and every
+  check from here on reads `go.mod`, `CHANGELOG.md` and the code from that
+  export rather than from the working tree, so nothing on disk that isn't in
+  the commit, not even a modification hidden from `git status`, can affect
+  them.
 - `origin` can be fetched, so the next checks see its current tags and
   branches. If it can't, this is a warning and they use the last fetched state.
 - No tag `vX.Y.Z` exists.
@@ -106,10 +111,8 @@ In order, stopping at the first failure:
   at least one entry in that section; has a
   `[X.Y.Z]: .../compare/vPREV...vX.Y.Z` link; and has a section for every
   earlier release tag reachable from `HEAD`.
-- `go build ./...` and `go test -count=1 ./...` succeed in a clean export of
-  `HEAD` made with `git archive`, so nothing on disk that isn't in the commit,
-  not even a gitignored file, can affect them. The tests are run even if a
-  cached result exists.
+- `go build ./...` and `go test -count=1 ./...` succeed in the export. The
+  tests are run even if a cached result exists.
 
 The tests exercise an HSM and a TPM when they are available. If you don't have
 SoftHSM set up as CI does in `.github/scripts/setup-softhsm.sh`, skip those
