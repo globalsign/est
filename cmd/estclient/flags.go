@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -50,7 +51,6 @@ const (
 	appName        = "estclient"
 	defaultTimeout = time.Second * 15
 	sepChar        = ","
-	versionString  = "1.0.6"
 )
 
 // Flag name constants.
@@ -391,8 +391,19 @@ func usageError(w io.Writer, line int) {
 
 // version outputs version information.
 func version(w io.Writer, set *flag.FlagSet) error {
-	fmt.Fprintf(w, "GlobalSign EST Client %s\n", versionString)
+	fmt.Fprintf(w, "GlobalSign EST Client %s\n", buildVersion())
 	return nil
+}
+
+// buildVersion returns the version of this module recorded in the binary's
+// build information, which the Go toolchain takes from the module's git tag
+// when the binary is built or installed. It returns "(devel)" if no version
+// was recorded.
+func buildVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "(devel)"
 }
 
 // usageMain outputs a full usage message for the application.

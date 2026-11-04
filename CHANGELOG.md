@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+### Changed
+- Report the version the Go toolchain records from the module's git tag, instead
+  of a hardcoded string, in the `estclient` and `estserver` version output, the
+  client's `User-Agent` header and the server's `Server` header.
 
 ## [1.0.6] - 2021-02-21
 ### Added
