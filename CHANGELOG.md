@@ -6,6 +6,23 @@
   of a hardcoded string, in the `estclient` and `estserver` version output, the
   client's `User-Agent` header and the server's `Server` header.
 
+## [1.0.7] - 2025-11-19
+### Added
+- Challenge password in the CSR as described in RFC 7030 section 3.5.
+- Signing key for signing the CSR when a challenge password is included, with
+  support in the `estclient` CLI.
+- `estclient cacerts`: flexible output filtering and writing every CA
+  certificate to a separate file.
+### Changed
+- Stop requiring the Content-Transfer-Encoding header, per RFC 8951.
+- Make all HTTP requests from the same HTTP client.
+- Update go-tpm from v0.3 to v0.9.
+- Update golang.org/x/crypto to v0.35.0.
+### Fixed
+- Return an error instead of panicking when parsing a malformed certificate.
+### Removed
+- The sample from the repository.
+
 ## [1.0.6] - 2021-02-21
 ### Added
 - Windows build capability.
@@ -34,7 +51,8 @@
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/globalsign/est/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/globalsign/est/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/globalsign/est/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/globalsign/est/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/globalsign/est/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/globalsign/est/compare/v1.0.3...v1.0.4
