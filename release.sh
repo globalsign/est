@@ -39,6 +39,7 @@ apply=false      # create the tag rather than only run the checks
 tag=""           # the release tag, vX.Y.Z
 version=""       # the bare version, X.Y.Z
 major=""         # its major version, X
+commit=""        # the full ID of the commit HEAD pointed at when the script started
 export_dir=""    # a clean export of HEAD, which the checks read
 head=""          # the short hash of HEAD
 prev=""          # the previous release tag reachable from HEAD, if any
@@ -179,6 +180,13 @@ enter_repository() {
 	cd "$top"
 }
 
+# Every step uses this one commit, so a checkout in another terminal while the
+# tests run cannot move the tag onto something that was not checked. Sets
+# $commit.
+resolve_head() {
+	commit=$(git rev-parse -q --verify 'HEAD^{commit}') || fail "HEAD does not point at a commit"
+}
+
 # The commit must be exactly what gets tagged. Untracked files count too: go
 # build and go test would compile them even though they aren't in the commit.
 check_working_tree() {
@@ -196,7 +204,7 @@ check_working_tree() {
 export_head() {
 	export_dir=$(mktemp -d)
 	trap 'rm -rf "$export_dir"' EXIT
-	git archive HEAD | tar -x -C "$export_dir" || fail "could not export HEAD"
+	git archive "$commit" | tar -x -C "$export_dir" || fail "could not export HEAD"
 	ok "exported HEAD to a clean directory for the checks"
 }
 
@@ -222,17 +230,17 @@ check_head_in_branch() {
 	if ! git rev-parse -q --verify "refs/remotes/$remote/$branch" >/dev/null; then
 		fail "there is no $remote/$branch; run 'git fetch $remote' first"
 	fi
-	head=$(git rev-parse --short HEAD)
-	if ! git merge-base --is-ancestor HEAD "$remote/$branch"; then
+	head=$(git rev-parse --short "$commit")
+	if ! git merge-base --is-ancestor "$commit" "$remote/$branch"; then
 		fail "HEAD not in history of $remote/$branch"
 	fi
-	ok "HEAD is $(git log -1 --format='%h (%s)'), in the history of $remote/$branch"
+	ok "HEAD is $(git log -1 --format='%h (%s)' "$commit"), in the history of $remote/$branch"
 }
 
 # The version must come after the previous release reachable from HEAD, if
 # there is one. Sets $prev.
 check_version_order() {
-	prev=$(latest_tag HEAD)
+	prev=$(latest_tag "$commit")
 	if [[ -n "$prev" ]]; then
 		if ! version_gt "$version" "${prev#v}"; then
 			fail "$tag is not greater than the previous release reachable from HEAD, $prev"
@@ -326,7 +334,7 @@ check_changelog_link() {
 # Every earlier release reachable from HEAD must have a section too.
 check_changelog_history() {
 	local t missing=""
-	for t in $(git tag --merged HEAD --list 'v*' | { grep -E "^v$version_re\$" || true; }); do
+	for t in $(git tag --merged "$commit" --list 'v*' | { grep -E "^v$version_re\$" || true; }); do
 		if ! grep -qE "^## \[$(re_escape "${t#v}")\]" "$export_dir/$changelog"; then
 			missing="$missing $t"
 		fi
@@ -359,7 +367,7 @@ create_tag() {
 	local msg
 	msg=$(mktemp)
 	printf '%s\n\n%s\n' "$tag" "$section" >"$msg"
-	if ! git tag -a --cleanup=whitespace -F "$msg" "$tag"; then
+	if ! git tag -a --cleanup=whitespace -F "$msg" "$tag" "$commit"; then
 		rm -f "$msg"
 		fail "failed to create tag $tag"
 	fi
@@ -374,7 +382,7 @@ report_dry_run() {
 
 report_tag() {
 	echo
-	echo "Created tag $tag on $(git log -1 --format='%h (%s)')."
+	echo "Created tag $tag on $(git log -1 --format='%h (%s)' "$commit")."
 	echo
 	echo "  Inspect it:  git show $tag"
 	echo "  Push it:     git push $remote $tag"
@@ -386,6 +394,7 @@ report_tag() {
 main() {
 	parse_args "$@"
 	enter_repository
+	resolve_head
 	check_working_tree
 	export_head
 	fetch_remote

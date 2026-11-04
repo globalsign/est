@@ -98,7 +98,8 @@ In order, stopping at the first failure:
   check from here on reads `go.mod`, `CHANGELOG.md` and the code from that
   export rather than from the working tree, so nothing on disk that isn't in
   the commit, not even a modification hidden from `git status`, can affect
-  them.
+  them. The commit is resolved once at the start, so a checkout in another
+  terminal while the checks run does not change what gets tagged.
 - `origin` can be fetched, so the next checks see its current tags and
   branches. If it can't, this is a warning and they use the last fetched state.
 - No tag `vX.Y.Z` exists.
