@@ -111,11 +111,8 @@ type Client struct {
 	InsecureSkipVerify bool
 }
 
-// Client constants.
-const (
-	estVersion = "v1.0.6"
-	userAgent  = "GlobalSign EST Client " + estVersion + " github.com/globalsign/est"
-)
+// userAgent is the value of the User-Agent header sent with every request.
+var userAgent = "GlobalSign EST Client " + estVersion + " " + modulePath
 
 // CACerts requests a copy of the current CA certificates.
 func (c *Client) CACerts(ctx context.Context) ([]*x509.Certificate, error) {
