@@ -7,11 +7,11 @@
 # commit, which must already be in the history of master on GitHub. Go modules
 # use the tag as the version, and the binaries and library report the version
 # the Go toolchain records from it, so nothing in the source tree has to be
-# bumped. This script checks that the commit builds, its tests pass,
-# CHANGELOG.md has a section for the version, and the working tree is clean,
-# and then, with --apply, creates the tag locally. Without --apply it is a dry
-# run that creates nothing. Pushing the tag is left to you so that you can
-# inspect it first.
+# bumped. This script checks that the working tree is clean, CHANGELOG.md has a
+# section for the version, and a clean export of the commit builds and passes
+# its tests, and then, with --apply, creates the tag locally. Without --apply
+# it is a dry run that creates nothing. Pushing the tag is left to you so that
+# you can inspect it first.
 #
 #   ./release.sh vX.Y.Z           run the checks only (a dry run)
 #   ./release.sh --apply vX.Y.Z   run the checks, then tag HEAD as vX.Y.Z
@@ -44,6 +44,7 @@ module=""        # the module path declared in go.mod
 release_date=""  # the date of the release's changelog section
 section=""       # the body of the release's changelog section
 entries=0        # the number of entries in it
+export_dir=""    # a clean export of HEAD, where the build and tests run
 
 usage() {
 	cat <<EOF
@@ -321,19 +322,29 @@ check_changelog_history() {
 	fi
 }
 
+# The build and tests run in a clean export of HEAD, so that nothing in the
+# working tree that isn't in the commit, such as a gitignored file, can affect
+# them. Sets $export_dir, which is removed when the script exits.
+export_head() {
+	export_dir=$(mktemp -d)
+	trap 'rm -rf "$export_dir"' EXIT
+	git archive HEAD | tar -x -C "$export_dir" || fail "could not export HEAD"
+	ok "exported HEAD to a clean directory for the build and tests"
+}
+
 check_build() {
-	echo "--- go build ./..."
-	go build ./... || fail "the build failed"
+	echo "--- go build ./...   (in the export)"
+	(cd "$export_dir" && go build ./...) || fail "the build failed"
 	ok "build succeeded"
 }
 
 check_tests() {
-	echo "--- go test -count=1 ./..."
+	echo "--- go test -count=1 ./...   (in the export)"
 	if [[ -n "${GLOBALSIGN_EST_SKIP:-}" ]]; then
 		warn "GLOBALSIGN_EST_SKIP=$GLOBALSIGN_EST_SKIP, so some tests are skipped"
 	fi
 	# -count=1 runs the tests even if a cached result exists.
-	go test -count=1 ./... || fail "the tests failed"
+	(cd "$export_dir" && go test -count=1 ./...) || fail "the tests failed"
 	ok "tests passed"
 }
 
@@ -378,6 +389,7 @@ main() {
 	check_version_order
 	check_module_path
 	check_changelog
+	export_head
 	check_build
 	check_tests
 	if ! $apply; then

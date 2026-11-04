@@ -106,8 +106,10 @@ In order, stopping at the first failure:
   at least one entry in that section; has a
   `[X.Y.Z]: .../compare/vPREV...vX.Y.Z` link; and has a section for every
   earlier release tag reachable from `HEAD`.
-- `go build ./...` and `go test -count=1 ./...` succeed; the tests are run even
-  if a cached result exists.
+- `go build ./...` and `go test -count=1 ./...` succeed in a clean export of
+  `HEAD` made with `git archive`, so nothing on disk that isn't in the commit,
+  not even a gitignored file, can affect them. The tests are run even if a
+  cached result exists.
 
 The tests exercise an HSM and a TPM when they are available. If you don't have
 SoftHSM set up as CI does in `.github/scripts/setup-softhsm.sh`, skip those
