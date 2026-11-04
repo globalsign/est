@@ -7,11 +7,11 @@
 # commit, which must already be in the history of master on GitHub. Go modules
 # use the tag as the version, and the binaries and library report the version
 # the Go toolchain records from it, so nothing in the source tree has to be
-# bumped. This script checks that the
-# commit builds, its tests pass, CHANGELOG.md has a section for the version, and
-# the working tree is clean, and then, with --apply, creates the tag locally.
-# Without --apply it is a dry run that creates nothing. Pushing the tag is left
-# to you so that you can inspect it first.
+# bumped. This script checks that the commit builds, its tests pass,
+# CHANGELOG.md has a section for the version, and the working tree is clean,
+# and then, with --apply, creates the tag locally. Without --apply it is a dry
+# run that creates nothing. Pushing the tag is left to you so that you can
+# inspect it first.
 #
 #   ./release.sh vX.Y.Z           run the checks only (a dry run)
 #   ./release.sh --apply vX.Y.Z   run the checks, then tag HEAD as vX.Y.Z
@@ -32,6 +32,18 @@ me=$(basename "$0")
 # Matches a bare "X.Y.Z" version without leading zeros. Release tags are the
 # same with a "v" prefix.
 version_re='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+
+# Set by the steps of main, in the order they run.
+apply=false      # create the tag rather than only run the checks
+tag=""           # the release tag, vX.Y.Z
+version=""       # the bare version, X.Y.Z
+major=""         # its major version, X
+head=""          # the short hash of HEAD
+prev=""          # the previous release tag reachable from HEAD, if any
+module=""        # the module path declared in go.mod
+release_date=""  # the date of the release's changelog section
+section=""       # the body of the release's changelog section
+entries=0        # the number of entries in it
 
 usage() {
 	cat <<EOF
@@ -120,8 +132,8 @@ changelog_section() {
 	' "$changelog"
 }
 
-main() {
-	local apply=false tag=""
+# Parses the command line. Sets $apply, $tag, $version and $major.
+parse_args() {
 	while (( $# > 0 )); do
 		case "$1" in
 			--apply)
@@ -152,49 +164,60 @@ main() {
 	if [[ ! "$tag" =~ ^v$version_re$ ]]; then
 		fail "'$tag' is not a release tag of the form vX.Y.Z (no leading zeros)"
 	fi
-	local version="${tag#v}"
-	local major="${version%%.*}"
-	local version_esc
-	version_esc=$(re_escape "$version")
+	version="${tag#v}"
+	major="${version%%.*}"
+}
 
+# Moves to the top of the repository, where go.mod and the changelog are.
+enter_repository() {
 	command -v go >/dev/null || fail "go is not installed"
 	local top
 	top=$(git rev-parse --show-toplevel) || fail "not inside a git repository"
 	cd "$top"
+}
 
-	# The commit must be exactly what gets tagged.
+# The commit must be exactly what gets tagged.
+check_working_tree() {
 	git update-index -q --refresh
 	if ! git diff --quiet || ! git diff --cached --quiet; then
 		git status --short --untracked-files=no >&2
 		fail "the working tree has staged or unstaged changes; commit or stash them first"
 	fi
 	ok "working tree has no staged or unstaged changes"
+}
 
-	# The checks against the remote need its current tags and branches.
+# The checks against the remote need its current tags and branches.
+fetch_remote() {
 	if git fetch --quiet --tags "$remote"; then
 		ok "fetched $remote"
 	else
 		warn "could not fetch $remote; checking against its last fetched state"
 	fi
+}
 
+check_tag_unused() {
 	if tag_exists "$tag"; then
 		fail "tag $tag already exists"
 	fi
+}
 
-	# The commit must already be in the history of the release branch on the
-	# remote, so that the tag never points at something that isn't on GitHub.
-	# HEAD itself may be detached or on any local branch.
+# The commit must already be in the history of the release branch on the
+# remote, so that the tag never points at something that isn't on GitHub. HEAD
+# itself may be detached or on any local branch. Sets $head.
+check_head_in_branch() {
 	if ! git rev-parse -q --verify "refs/remotes/$remote/$branch" >/dev/null; then
 		fail "there is no $remote/$branch; run 'git fetch $remote' first"
 	fi
-	local head
 	head=$(git rev-parse --short HEAD)
 	if ! git merge-base --is-ancestor HEAD "$remote/$branch"; then
 		fail "HEAD not in history of $remote/$branch"
 	fi
 	ok "HEAD is $(git log -1 --format='%h (%s)'), in the history of $remote/$branch"
+}
 
-	local prev
+# The version must come after the previous release reachable from HEAD, if
+# there is one. Sets $prev.
+check_version_order() {
 	prev=$(latest_tag HEAD)
 	if [[ -n "$prev" ]]; then
 		if ! version_gt "$version" "${prev#v}"; then
@@ -204,8 +227,10 @@ main() {
 	else
 		ok "$tag is the first release"
 	fi
+}
 
-	local module
+# Sets $module.
+check_module_path() {
 	module=$(module_path)
 	[[ -n "$module" ]] || fail "go.mod has no module directive"
 	if ! module_path_matches "$module" "$major"; then
@@ -216,45 +241,75 @@ main() {
 		fi
 	fi
 	ok "module path $module matches major version $major"
+}
 
-	# The changelog's first section must be for this release. "Unreleased" is
-	# only for the main branch between releases.
+# The changelog's first section must be for this release. "Unreleased" is only
+# for the main branch between releases.
+check_changelog() {
 	[[ -f "$changelog" ]] || fail "$changelog does not exist"
+	check_changelog_closed
+	check_changelog_heading
+	check_changelog_entries
+	check_changelog_link
+	check_changelog_history
+	local entry_word=entries
+	(( entries == 1 )) && entry_word=entry
+	ok "$changelog is ready for $tag ($entries $entry_word, dated $release_date)"
+}
+
+# Nothing may be left under Unreleased.
+check_changelog_closed() {
 	if grep -qiE '^##+ +\[?unreleased\]?' "$changelog"; then
 		fail "$changelog still has an Unreleased section; rename it to '## [$version] - $(date +%F)'"
 	fi
 	if grep -qiE '^\[unreleased\]:' "$changelog"; then
 		fail "$changelog still has an [Unreleased] link; replace it with one for [$version]"
 	fi
+}
+
+# The first section heading must be "## [X.Y.Z] - YYYY-MM-DD". Sets
+# $release_date.
+check_changelog_heading() {
 	local heading heading_re
 	heading=$(grep -m 1 -E '^## ' "$changelog" || true)
-	heading_re="^## \[$version_esc\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$"
+	heading_re="^## \[$(re_escape "$version")\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$"
 	if [[ ! "$heading" =~ $heading_re ]]; then
 		fail "the first section of $changelog is '${heading:-missing}', expected '## [$version] - YYYY-MM-DD'"
 	fi
-	local date="${heading##* - }"
-	if [[ "$date" != "$(date +%F)" ]]; then
-		warn "$changelog dates $tag $date, but today is $(date +%F)"
+	release_date="${heading##* - }"
+	if [[ "$release_date" != "$(date +%F)" ]]; then
+		warn "$changelog dates $tag $release_date, but today is $(date +%F)"
 	fi
-	local section entries
+}
+
+# The section must list at least one change. Sets $section and $entries.
+check_changelog_entries() {
 	section=$(changelog_section "$version")
 	entries=$(grep -cE '^[[:space:]]*[-*][[:space:]]+[^[:space:]]' <<<"$section" || true)
 	if (( entries == 0 )); then
 		fail "the [$version] section of $changelog has no entries"
 	fi
+}
+
+# The section's link must compare the release with the previous one.
+check_changelog_link() {
 	local link expected
 	if [[ -n "$prev" ]]; then
 		expected="/compare/$prev...$tag"
 	else
 		expected="/releases/tag/$tag"
 	fi
-	link=$(grep -m 1 -E "^\[$version_esc\]: " "$changelog" || true)
+	link=$(grep -m 1 -E "^\[$(re_escape "$version")\]: " "$changelog" || true)
 	if [[ -z "$link" ]]; then
 		fail "$changelog has no link for [$version]; add '[$version]: https://$module$expected'"
 	fi
 	if [[ "$link" != *"$expected" ]]; then
 		fail "the [$version] link in $changelog is '$link', expected it to end in '$expected'"
 	fi
+}
+
+# Every earlier release reachable from HEAD must have a section too.
+check_changelog_history() {
 	local t missing=""
 	for t in $(git tag --merged HEAD --list 'v*' | { grep -E "^v$version_re\$" || true; }); do
 		if ! grep -qE "^## \[$(re_escape "${t#v}")\]" "$changelog"; then
@@ -264,14 +319,15 @@ main() {
 	if [[ -n "$missing" ]]; then
 		fail "$changelog has no section for earlier release(s) reachable from HEAD:$missing"
 	fi
-	local entry_word=entries
-	(( entries == 1 )) && entry_word=entry
-	ok "$changelog is ready for $tag ($entries $entry_word, dated $date)"
+}
 
+check_build() {
 	echo "--- go build ./..."
 	go build ./... || fail "the build failed"
 	ok "build succeeded"
+}
 
+check_tests() {
 	echo "--- go test -count=1 ./..."
 	if [[ -n "${GLOBALSIGN_EST_SKIP:-}" ]]; then
 		warn "GLOBALSIGN_EST_SKIP=$GLOBALSIGN_EST_SKIP, so some tests are skipped"
@@ -279,17 +335,12 @@ main() {
 	# -count=1 runs the tests even if a cached result exists.
 	go test -count=1 ./... || fail "the tests failed"
 	ok "tests passed"
+}
 
-	if ! $apply; then
-		echo
-		echo "All checks passed. HEAD ($head) is ready to be tagged as $tag."
-		echo "Nothing was created. Run '$me --apply $tag' to create the tag."
-		return
-	fi
-
-	# The tag message is the changelog section. The whitespace cleanup keeps its
-	# "### Added" etc. headings, which the default cleanup would strip as
-	# comments. The tag is also signed if tag.gpgSign is set.
+# The tag message is the changelog section. The whitespace cleanup keeps its
+# "### Added" etc. headings, which the default cleanup would strip as comments.
+# The tag is also signed if tag.gpgSign is set.
+create_tag() {
 	local msg
 	msg=$(mktemp)
 	printf '%s\n\n%s\n' "$tag" "$section" >"$msg"
@@ -298,7 +349,15 @@ main() {
 		fail "failed to create tag $tag"
 	fi
 	rm -f "$msg"
+}
 
+report_dry_run() {
+	echo
+	echo "All checks passed. HEAD ($head) is ready to be tagged as $tag."
+	echo "Nothing was created. Run '$me --apply $tag' to create the tag."
+}
+
+report_tag() {
 	echo
 	echo "Created tag $tag on $(git log -1 --format='%h (%s)')."
 	echo
@@ -307,6 +366,26 @@ main() {
 	echo "  Remove it:   git tag -d $tag    (only before pushing; a pushed tag is permanent)"
 	echo
 	echo "After pushing, publish the GitHub release as described in RELEASING.md."
+}
+
+main() {
+	parse_args "$@"
+	enter_repository
+	check_working_tree
+	fetch_remote
+	check_tag_unused
+	check_head_in_branch
+	check_version_order
+	check_module_path
+	check_changelog
+	check_build
+	check_tests
+	if ! $apply; then
+		report_dry_run
+		return
+	fi
+	create_tag
+	report_tag
 }
 
 main "$@"
