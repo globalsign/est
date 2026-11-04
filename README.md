@@ -128,3 +128,19 @@ use that chain to reenroll:
 Note that when we omit the `-csr` option when reenrolling, the EST client
 automatically generates a CSR for us by copying the subject field and subject
 alternative name extension from the certificate we're renewing.
+
+## Releasing
+
+For maintainers. A release is a git tag of the form `vX.Y.Z` on a commit in
+the history of `master`; Go modules use the tag as the version, so nothing in
+the source tree needs bumping. Close out `CHANGELOG.md` so that its first
+section is `## [X.Y.Z] - YYYY-MM-DD`, commit that to `master`, check out the
+commit to release, and run the release script. It checks that the commit
+builds, its tests pass, the changelog is ready and the working tree is clean.
+On its own it is a dry run; with `--apply` it also tags the commit:
+
+    user@host:$ ./release.sh v1.0.8
+    user@host:$ ./release.sh --apply v1.0.8
+    user@host:$ git push origin v1.0.8
+
+See [RELEASING.md](RELEASING.md) for the full procedure.
